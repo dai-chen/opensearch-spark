@@ -17,6 +17,7 @@ singleStatement
 statement
     : skippingIndexStatement
     | coveringIndexStatement
+    | materializedViewStatement
     ;
 
 skippingIndexStatement
@@ -46,12 +47,34 @@ dropSkippingIndexStatement
 
 coveringIndexStatement
     : createCoveringIndexStatement
+    | dropCoveringIndexStatement
     ;
 
 createCoveringIndexStatement
     : CREATE INDEX indexName=identifier ON tableName=multipartIdentifier
         LEFT_PAREN indexColumns=multipartIdentifierPropertyList RIGHT_PAREN
         (WITH LEFT_PAREN propertyList RIGHT_PAREN)?
+    ;
+
+dropCoveringIndexStatement
+    : DROP INDEX indexName=identifier ON tableName=multipartIdentifier
+    ;
+
+materializedViewStatement
+    : createMaterializedViewStatement
+    ;
+
+createMaterializedViewStatement
+    : CREATE MATERIALIZED VIEW mvName=multipartIdentifier
+        AS query=.+
+    ;
+
+dropMaterializedViewStatement
+    : DROP MATERIALIZED VIEW mvName=multipartIdentifier
+    ;
+
+remainingCharacters
+    : .+ // Match one or more of any character
     ;
 
 indexColTypeList
