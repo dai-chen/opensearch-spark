@@ -154,23 +154,31 @@ COMMA: ',';
 DOT: '.';
 
 
+AS: 'AS';
 CREATE: 'CREATE';
 DESC: 'DESC';
 DESCRIBE: 'DESCRIBE';
 DROP: 'DROP';
 FALSE: 'FALSE';
 INDEX: 'INDEX';
+MATERIALIZED: 'MATERIALIZED';
 ON: 'ON';
 PARTITION: 'PARTITION';
 REFRESH: 'REFRESH';
-STRING: 'STRING';
 TRUE: 'TRUE';
+VIEW: 'VIEW';
 WITH: 'WITH';
 
 
 EQ  : '=' | '==';
 MINUS: '-';
 
+STRING
+    : '\'' ( ~('\''|'\\') | ('\\' .) )* '\''
+    | '"' ( ~('"'|'\\') | ('\\' .) )* '"'
+    | 'R\'' (~'\'')* '\''
+    | 'R"'(~'"')* '"'
+    ;
 
 INTEGER_VALUE
     : DIGIT+

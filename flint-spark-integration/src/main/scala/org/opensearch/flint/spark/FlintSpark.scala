@@ -16,6 +16,7 @@ import org.opensearch.flint.spark.FlintSpark.RefreshMode.{FULL, INCREMENTAL, Ref
 import org.opensearch.flint.spark.FlintSparkIndex.ID_COLUMN
 import org.opensearch.flint.spark.covering.FlintSparkCoveringIndex
 import org.opensearch.flint.spark.covering.FlintSparkCoveringIndex.{parseFlintIndexName, COVERING_INDEX_TYPE}
+import org.opensearch.flint.spark.mv.FlintSparkMaterializedView
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex.SKIPPING_INDEX_TYPE
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.{SkippingKind, SkippingKindSerializer}
@@ -37,7 +38,7 @@ import org.apache.spark.sql.streaming.OutputMode.Append
 class FlintSpark(val spark: SparkSession) {
 
   /** Flint spark configuration */
-  private val flintSparkConf: FlintSparkConf =
+  val flintSparkConf: FlintSparkConf =
     FlintSparkConf(
       Map(
         DOC_ID_COLUMN_NAME.optionKey -> ID_COLUMN,
@@ -70,6 +71,16 @@ class FlintSpark(val spark: SparkSession) {
   }
 
   /**
+   * Create materialized view builder for creating mv with fluent API.
+   *
+   * @return
+   *   mv builder
+   */
+  def materializedView(): FlintSparkMaterializedView.Builder = {
+    new FlintSparkMaterializedView.Builder(this)
+  }
+
+  /**
    * Create the given index with metadata.
    *
    * @param index
@@ -97,42 +108,37 @@ class FlintSpark(val spark: SparkSession) {
   def refreshIndex(indexName: String, mode: RefreshMode): Option[String] = {
     val index = describeIndex(indexName)
       .getOrElse(throw new IllegalStateException(s"Index $indexName doesn't exist"))
-    val tableName = getSourceTableName(index)
-
-    // Write Flint index data to Flint data source (shared by both refresh modes for now)
-    def writeFlintIndex(df: DataFrame): Unit = {
-      index
-        .build(df)
-        .write
-        .format(FLINT_DATASOURCE)
-        .options(flintSparkConf.properties)
-        .mode(Overwrite)
-        .save(indexName)
-    }
 
     mode match {
       case FULL if isIncrementalRefreshing(indexName) =>
         throw new IllegalStateException(
           s"Index $indexName is incremental refreshing and cannot be manual refreshed")
+
       case FULL =>
-        writeFlintIndex(
-          spark.read
-            .table(tableName))
+        index
+          .buildBatch(this)
+          .format(FLINT_DATASOURCE)
+          .options(flintSparkConf.properties)
+          .mode(Overwrite)
+          .save(indexName)
         None
 
       case INCREMENTAL =>
-        // TODO: Use Foreach sink for now. Need to move this to FlintSparkSkippingIndex
-        //  once finalized. Otherwise, covering index/MV may have different logic.
-        val job = spark.readStream
-          .table(tableName)
-          .writeStream
-          .queryName(indexName)
-          .outputMode(Append())
-          .foreachBatch { (batchDF: DataFrame, _: Long) =>
-            writeFlintIndex(batchDF)
-          }
-          .start()
-        Some(job.id.toString)
+        val job =
+          index
+            .buildStream(this)
+            .queryName(indexName)
+            .outputMode(Append())
+
+        // Skipping index uses foreachBatch sink and will fail with these
+        if (index.kind != SKIPPING_INDEX_TYPE) {
+          job
+            .format(FLINT_DATASOURCE)
+            .options(flintSparkConf.properties)
+        }
+
+        val query = job.start()
+        Some(query.id.toString)
     }
   }
 
