@@ -10,7 +10,7 @@ import org.json4s.JsonAST.{JArray, JObject, JString}
 import org.json4s.native.JsonMethods.{compact, parse, render}
 import org.json4s.native.Serialization
 import org.opensearch.flint.core.metadata.FlintMetadata
-import org.opensearch.flint.spark.{FlintSpark, FlintSparkIndex, FlintSparkIndexBuilder}
+import org.opensearch.flint.spark.{FlintSpark, FlintSparkIndex, FlintSparkIndexBuilder, FlintSparkIndexOptions}
 import org.opensearch.flint.spark.covering.FlintSparkCoveringIndex.{getFlintIndexName, COVERING_INDEX_TYPE}
 
 import org.apache.spark.sql.DataFrame
@@ -165,7 +165,7 @@ object FlintSparkCoveringIndex {
       this
     }
 
-    override protected def buildIndex(): FlintSparkIndex =
+    override protected def buildIndex(options: FlintSparkIndexOptions): FlintSparkIndex =
       new FlintSparkCoveringIndex(indexName, tableName, indexedColumns)
   }
 }

@@ -9,7 +9,7 @@ import org.json4s._
 import org.json4s.native.JsonMethods._
 import org.json4s.native.Serialization
 import org.opensearch.flint.core.metadata.FlintMetadata
-import org.opensearch.flint.spark.{FlintSpark, FlintSparkIndex, FlintSparkIndexBuilder}
+import org.opensearch.flint.spark.{FlintSpark, FlintSparkIndex, FlintSparkIndexBuilder, FlintSparkIndexOptions}
 import org.opensearch.flint.spark.FlintSparkIndex.ID_COLUMN
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex.{getSkippingIndexName, FILE_PATH_COLUMN, SKIPPING_INDEX_TYPE}
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.SkippingKindSerializer
@@ -33,7 +33,8 @@ import org.apache.spark.sql.types.StructType
  */
 class FlintSparkSkippingIndex(
     tableName: String,
-    val indexedColumns: Seq[FlintSparkSkippingStrategy])
+    val indexedColumns: Seq[FlintSparkSkippingStrategy],
+    indexOptions: FlintSparkIndexOptions = FlintSparkIndexOptions.empty)
     extends FlintSparkIndex {
 
   require(indexedColumns.nonEmpty, "indexed columns must not be empty")
@@ -49,16 +50,22 @@ class FlintSparkSkippingIndex(
   }
 
   override def metadata(): FlintMetadata = {
-    new FlintMetadata(s"""{
-        |   "_meta": {
-        |     "name": "${name()}",
-        |     "kind": "$SKIPPING_INDEX_TYPE",
-        |     "indexedColumns": $getMetaInfo,
-        |     "source": "$tableName"
-        |   },
-        |   "properties": $getSchema
-        | }
-        |""".stripMargin)
+    val metadata = new FlintMetadata(s"""{
+         |   "_meta": {
+         |     "name": "${name()}",
+         |     "kind": "$SKIPPING_INDEX_TYPE",
+         |     "indexedColumns": $getMetaInfo,
+         |     "source": "$tableName",
+         |     "options": $getIndexOptions
+         |   },
+         |   "properties": $getSchema
+         | }
+         |""".stripMargin)
+
+    if (indexOptions.indexSettings().isDefined) {
+      metadata.setIndexSettings(indexOptions.indexSettings().get)
+    }
+    metadata
   }
 
   override def build(df: DataFrame): DataFrame = {
@@ -78,6 +85,10 @@ class FlintSparkSkippingIndex(
 
   private def getMetaInfo: String = {
     Serialization.write(indexedColumns)
+  }
+
+  private def getIndexOptions: String = {
+    Serialization.write(indexOptions.options)
   }
 
   private def getSchema: String = {
@@ -186,8 +197,8 @@ object FlintSparkSkippingIndex {
       this
     }
 
-    override def buildIndex(): FlintSparkIndex =
-      new FlintSparkSkippingIndex(tableName, indexedColumns)
+    override def buildIndex(options: FlintSparkIndexOptions): FlintSparkIndex =
+      new FlintSparkSkippingIndex(tableName, indexedColumns, options)
 
     private def addIndexedColumn(indexedCol: FlintSparkSkippingStrategy): Unit = {
       require(

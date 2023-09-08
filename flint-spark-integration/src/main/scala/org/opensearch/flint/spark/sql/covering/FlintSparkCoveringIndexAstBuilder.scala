@@ -16,7 +16,7 @@ import org.apache.spark.sql.catalyst.plans.logical.Command
 /**
  * Flint Spark AST builder that builds Spark command for Flint covering index statement.
  */
-trait FlintSparkCoveringIndexAstBuilder extends FlintSparkSqlExtensionsVisitor[Command] {
+trait FlintSparkCoveringIndexAstBuilder extends FlintSparkSqlExtensionsVisitor[AnyRef] {
 
   override def visitCreateCoveringIndexStatement(
       ctx: CreateCoveringIndexStatementContext): Command = {
