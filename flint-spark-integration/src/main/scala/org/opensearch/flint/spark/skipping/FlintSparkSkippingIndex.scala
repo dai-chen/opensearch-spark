@@ -11,6 +11,7 @@ import org.json4s.native.Serialization
 import org.opensearch.flint.core.metadata.FlintMetadata
 import org.opensearch.flint.spark.{FlintSpark, FlintSparkIndex, FlintSparkIndexBuilder, FlintSparkIndexOptions}
 import org.opensearch.flint.spark.FlintSparkIndex.ID_COLUMN
+import org.opensearch.flint.spark.FlintSparkIndexOptions.empty
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex.{getSkippingIndexName, FILE_PATH_COLUMN, SKIPPING_INDEX_TYPE}
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.SkippingKindSerializer
 import org.opensearch.flint.spark.skipping.minmax.MinMaxSkippingStrategy
@@ -34,7 +35,7 @@ import org.apache.spark.sql.types.StructType
 class FlintSparkSkippingIndex(
     tableName: String,
     val indexedColumns: Seq[FlintSparkSkippingStrategy],
-    indexOptions: FlintSparkIndexOptions = FlintSparkIndexOptions.empty)
+    override val options: FlintSparkIndexOptions = empty)
     extends FlintSparkIndex {
 
   require(indexedColumns.nonEmpty, "indexed columns must not be empty")
@@ -62,9 +63,7 @@ class FlintSparkSkippingIndex(
          | }
          |""".stripMargin)
 
-    if (indexOptions.indexSettings().isDefined) {
-      metadata.setIndexSettings(indexOptions.indexSettings().get)
-    }
+    options.indexSettings().foreach(metadata.setIndexSettings)
     metadata
   }
 
@@ -88,7 +87,7 @@ class FlintSparkSkippingIndex(
   }
 
   private def getIndexOptions: String = {
-    Serialization.write(indexOptions.options)
+    Serialization.write(options.options)
   }
 
   private def getSchema: String = {
