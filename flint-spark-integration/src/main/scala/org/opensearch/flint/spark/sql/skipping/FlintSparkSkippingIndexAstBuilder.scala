@@ -11,7 +11,7 @@ import org.opensearch.flint.spark.FlintSpark.RefreshMode
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.SkippingKind
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.SkippingKind.{MIN_MAX, PARTITION, VALUE_SET}
-import org.opensearch.flint.spark.sql.{FlintSparkSqlAstBuilderBase, FlintSparkSqlCommand, FlintSparkSqlExtensionsVisitor}
+import org.opensearch.flint.spark.sql.{FlintSparkSqlCommand, FlintSparkSqlExtensionsVisitor, SparkSqlAstBuilder}
 import org.opensearch.flint.spark.sql.FlintSparkSqlAstBuilder.getFullTableName
 import org.opensearch.flint.spark.sql.FlintSparkSqlExtensionsParser._
 
@@ -24,7 +24,7 @@ import org.apache.spark.sql.types.StringType
  * Flint Spark AST builder that builds Spark command for Flint skipping index statement.
  */
 trait FlintSparkSkippingIndexAstBuilder extends FlintSparkSqlExtensionsVisitor[AnyRef] {
-  self: FlintSparkSqlAstBuilderBase =>
+  self: SparkSqlAstBuilder =>
 
   override def visitCreateSkippingIndexStatement(
       ctx: CreateSkippingIndexStatementContext): Command =

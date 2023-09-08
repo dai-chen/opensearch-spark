@@ -15,9 +15,9 @@ import org.opensearch.flint.spark.sql.FlintSparkSqlExtensionsParser.{PropertyKey
 import org.apache.spark.sql.catalyst.parser.ParserUtils.string
 
 /**
- * Flint Spark AST builder base trait that builds for common plan node.
+ * AST builder that builds for common rule in Spark SQL grammar.
  */
-trait FlintSparkSqlAstBuilderBase extends FlintSparkSqlExtensionsVisitor[AnyRef] {
+trait SparkSqlAstBuilder extends FlintSparkSqlExtensionsVisitor[AnyRef] {
 
   override def visitPropertyList(ctx: PropertyListContext): FlintSparkIndexOptions = {
     val properties = ctx.property.asScala.map { property =>
