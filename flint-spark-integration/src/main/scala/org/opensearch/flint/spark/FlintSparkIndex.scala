@@ -7,7 +7,8 @@ package org.opensearch.flint.spark
 
 import org.opensearch.flint.core.metadata.FlintMetadata
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{DataFrameWriter, Row}
+import org.apache.spark.sql.streaming.DataStreamWriter
 
 /**
  * Flint index interface in Spark.
@@ -31,16 +32,9 @@ trait FlintSparkIndex {
    */
   def metadata(): FlintMetadata
 
-  /**
-   * Build a data frame to represent index data computation logic. Upper level code decides how to
-   * use this, ex. batch or streaming, fully or incremental refresh.
-   *
-   * @param df
-   *   data frame to append building logic
-   * @return
-   *   index building data frame
-   */
-  def build(df: DataFrame): DataFrame
+  def buildBatch(flint: FlintSpark): DataFrameWriter[Row]
+
+  def buildStream(flint: FlintSpark): DataStreamWriter[Row]
 }
 
 object FlintSparkIndex {

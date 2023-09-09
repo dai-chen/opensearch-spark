@@ -17,6 +17,7 @@ singleStatement
 statement
     : skippingIndexStatement
     | coveringIndexStatement
+    | materializedViewStatement
     ;
 
 skippingIndexStatement
@@ -62,6 +63,14 @@ refreshCoveringIndexStatement
 
 dropCoveringIndexStatement
     : DROP INDEX indexName=identifier ON tableName=multipartIdentifier
+    ;
+
+materializedViewStatement
+    : createMaterializedViewStatement
+    ;
+
+createMaterializedViewStatement
+    : CREATE MATERIALIZED VIEW mvName=multipartIdentifier
     ;
 
 indexColTypeList

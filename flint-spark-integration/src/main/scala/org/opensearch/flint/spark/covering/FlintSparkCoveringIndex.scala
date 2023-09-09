@@ -13,8 +13,9 @@ import org.opensearch.flint.core.metadata.FlintMetadata
 import org.opensearch.flint.spark.{FlintSpark, FlintSparkIndex, FlintSparkIndexBuilder}
 import org.opensearch.flint.spark.covering.FlintSparkCoveringIndex.{getFlintIndexName, COVERING_INDEX_TYPE}
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{DataFrame, DataFrameWriter, Row}
 import org.apache.spark.sql.flint.datatype.FlintDataType
+import org.apache.spark.sql.streaming.DataStreamWriter
 import org.apache.spark.sql.types.StructType
 
 /**
@@ -55,7 +56,15 @@ class FlintSparkCoveringIndex(
         |""".stripMargin)
   }
 
-  override def build(df: DataFrame): DataFrame = {
+  override def buildBatch(flint: FlintSpark): DataFrameWriter[Row] = {
+    build(flint.spark.read.table(tableName)).write
+  }
+
+  override def buildStream(flint: FlintSpark): DataStreamWriter[Row] = {
+    build(flint.spark.readStream.table(tableName)).writeStream
+  }
+
+  private def build(df: DataFrame): DataFrame = {
     val colNames = indexedColumns.keys.toSeq
     df.select(colNames.head, colNames.tail: _*)
   }
