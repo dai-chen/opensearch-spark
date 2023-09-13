@@ -7,7 +7,8 @@ package org.opensearch.flint.spark
 
 import scala.collection.JavaConverters._
 
-import org.json4s.{Formats, JArray, NoTypeHints}
+import org.json4s.{Formats, JArray, JObject, NoTypeHints}
+import org.json4s.JsonAST.JField
 import org.json4s.native.JsonMethods.parse
 import org.json4s.native.Serialization
 import org.opensearch.flint.core.{FlintClient, FlintClientBuilder}
@@ -30,6 +31,7 @@ import org.apache.spark.sql.flint.FlintDataSourceV2.FLINT_DATASOURCE
 import org.apache.spark.sql.flint.config.FlintSparkConf
 import org.apache.spark.sql.flint.config.FlintSparkConf.{DOC_ID_COLUMN_NAME, IGNORE_DOC_ID_COLUMN}
 import org.apache.spark.sql.streaming.OutputMode.Append
+import org.apache.spark.sql.streaming.Trigger
 
 /**
  * Flint Spark integration API entrypoint.
@@ -128,11 +130,21 @@ class FlintSpark(val spark: SparkSession) {
           .writeStream
           .queryName(indexName)
           .outputMode(Append())
-          .foreachBatch { (batchDF: DataFrame, _: Long) =>
-            writeFlintIndex(batchDF)
-          }
-          .start()
-        Some(job.id.toString)
+
+        index.options
+          .checkpointLocation()
+          .foreach(location => job.option("checkpointLocation", location))
+        index.options
+          .refreshInterval()
+          .foreach(interval => job.trigger(Trigger.ProcessingTime(interval)))
+
+        val jobId =
+          job
+            .foreachBatch { (batchDF: DataFrame, _: Long) =>
+              writeFlintIndex(batchDF)
+            }
+            .start()
+        Some(jobId.toString)
     }
   }
 
@@ -211,6 +223,14 @@ class FlintSpark(val spark: SparkSession) {
     val tableName = (meta \ "source").extract[String]
     val indexType = (meta \ "kind").extract[String]
     val indexedColumns = (meta \ "indexedColumns").asInstanceOf[JArray]
+    val indexOptions = FlintSparkIndexOptions(
+      (meta \ "options")
+        .asInstanceOf[JObject]
+        .obj
+        .map { case JField(key, value) =>
+          key -> value.values.toString
+        }
+        .toMap)
 
     indexType match {
       case SKIPPING_INDEX_TYPE =>
@@ -230,7 +250,7 @@ class FlintSpark(val spark: SparkSession) {
               throw new IllegalStateException(s"Unknown skipping strategy: $other")
           }
         }
-        new FlintSparkSkippingIndex(tableName, strategies)
+        new FlintSparkSkippingIndex(tableName, strategies, indexOptions)
       case COVERING_INDEX_TYPE =>
         new FlintSparkCoveringIndex(
           parseFlintIndexName(indexName, tableName),

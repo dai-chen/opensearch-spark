@@ -14,11 +14,23 @@ public class FlintMetadata {
   // TODO: define metadata format and create strong-typed class
   private final String content;
 
+  // TODO: temporary and will be refactored along with entire metadata
+  /** Optional index settings */
+  private String indexSettings;
+
   public FlintMetadata(String content) {
     this.content = content;
   }
 
   public String getContent() {
     return content;
+  }
+
+  public String getIndexSettings() {
+    return indexSettings;
+  }
+
+  public void setIndexSettings(String indexSettings) {
+    this.indexSettings = indexSettings;
   }
 }

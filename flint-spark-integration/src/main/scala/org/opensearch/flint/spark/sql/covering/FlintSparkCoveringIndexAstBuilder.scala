@@ -7,8 +7,8 @@ package org.opensearch.flint.spark.sql.covering
 
 import org.opensearch.flint.spark.FlintSpark.RefreshMode
 import org.opensearch.flint.spark.covering.FlintSparkCoveringIndex.getFlintIndexName
-import org.opensearch.flint.spark.sql.{FlintSparkSqlCommand, FlintSparkSqlExtensionsVisitor}
-import org.opensearch.flint.spark.sql.FlintSparkSqlAstBuilder.{getFullTableName, isAutoRefreshEnabled}
+import org.opensearch.flint.spark.sql.{FlintSparkSqlCommand, FlintSparkSqlExtensionsVisitor, SparkSqlAstBuilder}
+import org.opensearch.flint.spark.sql.FlintSparkSqlAstBuilder.getFullTableName
 import org.opensearch.flint.spark.sql.FlintSparkSqlExtensionsParser.{CreateCoveringIndexStatementContext, DropCoveringIndexStatementContext, RefreshCoveringIndexStatementContext}
 
 import org.apache.spark.sql.catalyst.plans.logical.Command
@@ -16,7 +16,8 @@ import org.apache.spark.sql.catalyst.plans.logical.Command
 /**
  * Flint Spark AST builder that builds Spark command for Flint covering index statement.
  */
-trait FlintSparkCoveringIndexAstBuilder extends FlintSparkSqlExtensionsVisitor[Command] {
+trait FlintSparkCoveringIndexAstBuilder extends FlintSparkSqlExtensionsVisitor[AnyRef] {
+  self: SparkSqlAstBuilder =>
 
   override def visitCreateCoveringIndexStatement(
       ctx: CreateCoveringIndexStatementContext): Command = {
@@ -33,10 +34,12 @@ trait FlintSparkCoveringIndexAstBuilder extends FlintSparkSqlExtensionsVisitor[C
         val colName = indexColCtx.multipartIdentifier().getText
         indexBuilder.addIndexColumns(colName)
       }
-      indexBuilder.create()
+
+      val options = visitPropertyList(ctx.propertyList())
+      indexBuilder.create(options)
 
       // Trigger auto refresh if enabled
-      if (isAutoRefreshEnabled(ctx.propertyList())) {
+      if (options.autoRefresh()) {
         val flintIndexName = getFlintIndexName(indexName, getFullTableName(flint, ctx.tableName))
         flint.refreshIndex(flintIndexName, RefreshMode.INCREMENTAL)
       }

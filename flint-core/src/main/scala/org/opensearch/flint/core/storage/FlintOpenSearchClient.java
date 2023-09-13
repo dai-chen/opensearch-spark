@@ -60,6 +60,9 @@ public class FlintOpenSearchClient implements FlintClient {
   public void createIndex(String indexName, FlintMetadata metadata) {
     try (RestHighLevelClient client = createClient()) {
       CreateIndexRequest request = new CreateIndexRequest(indexName);
+      if (metadata.getIndexSettings() != null) {
+        request.settings(metadata.getIndexSettings(), XContentType.JSON);
+      }
       request.mapping(metadata.getContent(), XContentType.JSON);
 
       client.indices().create(request, RequestOptions.DEFAULT);

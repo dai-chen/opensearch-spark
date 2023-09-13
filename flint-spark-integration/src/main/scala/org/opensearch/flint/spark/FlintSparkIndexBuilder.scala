@@ -31,13 +31,18 @@ abstract class FlintSparkIndexBuilder(flint: FlintSpark) {
 
   /**
    * Create Flint index.
+   *
+   * @param options
+   *   index options
    */
-  def create(): Unit = flint.createIndex(buildIndex())
+  def create(options: FlintSparkIndexOptions = null): Unit = {
+    flint.createIndex(buildIndex(options))
+  }
 
   /**
    * Build method for concrete builder class to implement
    */
-  protected def buildIndex(): FlintSparkIndex
+  protected def buildIndex(options: FlintSparkIndexOptions): FlintSparkIndex
 
   protected def findColumn(colName: String): Column =
     allColumns.getOrElse(

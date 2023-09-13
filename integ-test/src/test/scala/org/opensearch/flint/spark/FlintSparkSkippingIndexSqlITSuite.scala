@@ -78,6 +78,18 @@ class FlintSparkSkippingIndexSqlITSuite extends FlintSparkSuite {
     indexData.count() shouldBe 2
   }
 
+  test("create skipping index with index settings") {
+    sql(s"""
+           | CREATE SKIPPING INDEX ON $testTable
+           | (
+           |   year PARTITION,
+           |   name VALUE_SET,
+           |   age MIN_MAX
+           | )
+           | WITH (index_settings = '{"number_of_shards": 2, "number_of_replicas": 3}')
+           | """.stripMargin)
+  }
+
   test("describe skipping index") {
     flint
       .skippingIndex()

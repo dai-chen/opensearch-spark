@@ -47,7 +47,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "boolean_col": {
@@ -73,7 +74,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "string_col": {
@@ -101,7 +103,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "long_col": {
@@ -127,7 +130,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "int_col": {
@@ -153,7 +157,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "short_col": {
@@ -179,7 +184,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "byte_col": {
@@ -205,7 +211,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "double_col": {
@@ -231,7 +238,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "float_col": {
@@ -257,7 +265,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "timestamp_col": {
@@ -284,7 +293,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "date_col": {
@@ -312,7 +322,8 @@ class FlintSparkSkippingIndexSuite extends FlintSuite {
          |     "name": "flint_default_test_skipping_index",
          |     "kind": "skipping",
          |     "indexedColumns": [{}],
-         |     "source": "default.test"
+         |     "source": "default.test",
+         |     "options": {}
          |   },
          |   "properties": {
          |     "struct_col": {
