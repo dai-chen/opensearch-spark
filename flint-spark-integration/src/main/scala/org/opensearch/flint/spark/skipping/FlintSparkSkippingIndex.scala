@@ -19,10 +19,13 @@ import org.opensearch.flint.spark.skipping.minmax.MinMaxSkippingStrategy
 import org.opensearch.flint.spark.skipping.partition.PartitionSkippingStrategy
 import org.opensearch.flint.spark.skipping.valueset.ValueSetSkippingStrategy
 
-import org.apache.spark.sql.{Column, DataFrame}
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.dsl.expressions.DslExpression
+import org.apache.spark.sql.flint.FlintDataSourceV2.FLINT_DATASOURCE
+import org.apache.spark.sql.flint.config.FlintSparkConf
 import org.apache.spark.sql.flint.datatype.FlintDataType
 import org.apache.spark.sql.functions.{col, input_file_name, sha1}
+import org.apache.spark.sql.streaming.DataStreamWriter
 import org.apache.spark.sql.types.StructType
 
 /**
@@ -66,19 +69,23 @@ class FlintSparkSkippingIndex(
         |""".stripMargin)
   }
 
-  override def build(df: DataFrame): DataFrame = {
-    val outputNames = indexedColumns.flatMap(_.outputSchema().keys)
-    val aggFuncs = indexedColumns.flatMap(_.getAggregators)
+  override def buildBatch(spark: SparkSession, conf: FlintSparkConf): DataFrameWriter[Row] = {
+    build(spark.read.table(tableName)).write
+  }
 
-    // Wrap aggregate function with output column name
-    val namedAggFuncs =
-      (outputNames, aggFuncs).zipped.map { case (name, aggFunc) =>
-        new Column(aggFunc.toAggregateExpression().as(name))
+  override def buildStream(spark: SparkSession, conf: FlintSparkConf): DataStreamWriter[Row] = {
+    spark.readStream
+      .table(tableName)
+      .writeStream
+      .foreachBatch { (batch: DataFrame, _: Long) =>
+        build(batch)
+          .withColumn(ID_COLUMN, sha1(col(FILE_PATH_COLUMN)))
+          .write
+          .format(FLINT_DATASOURCE)
+          .options(conf.properties)
+          .mode(SaveMode.Overwrite)
+          .save(name())
       }
-
-    df.groupBy(input_file_name().as(FILE_PATH_COLUMN))
-      .agg(namedAggFuncs.head, namedAggFuncs.tail: _*)
-      .withColumn(ID_COLUMN, sha1(col(FILE_PATH_COLUMN)))
   }
 
   private def getMetaInfo: String = {
@@ -100,6 +107,20 @@ class FlintSparkSkippingIndex(
     // Convert StructType to {"properties": ...} and only need the properties value
     val properties = FlintDataType.serialize(allFieldSparkTypes)
     compact(render(parse(properties) \ "properties"))
+  }
+
+  private def build(df: DataFrame): DataFrame = {
+    val outputNames = indexedColumns.flatMap(_.outputSchema().keys)
+    val aggFuncs = indexedColumns.flatMap(_.getAggregators)
+
+    // Wrap aggregate function with output column name
+    val namedAggFuncs =
+      (outputNames, aggFuncs).zipped.map { case (name, aggFunc) =>
+        new Column(aggFunc.toAggregateExpression().as(name))
+      }
+
+    df.groupBy(input_file_name().as(FILE_PATH_COLUMN))
+      .agg(namedAggFuncs.head, namedAggFuncs.tail: _*)
   }
 }
 

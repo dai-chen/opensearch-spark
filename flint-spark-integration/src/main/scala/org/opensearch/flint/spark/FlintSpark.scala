@@ -111,37 +111,32 @@ class FlintSpark(val spark: SparkSession) {
   def refreshIndex(indexName: String, mode: RefreshMode): Option[String] = {
     val index = describeIndex(indexName)
       .getOrElse(throw new IllegalStateException(s"Index $indexName doesn't exist"))
-    val tableName = getSourceTableName(index)
-
-    // Write Flint index data to Flint data source (shared by both refresh modes for now)
-    def writeFlintIndex(df: DataFrame): Unit = {
-      index
-        .build(df)
-        .write
-        .format(FLINT_DATASOURCE)
-        .options(flintSparkConf.properties)
-        .mode(Overwrite)
-        .save(indexName)
-    }
 
     mode match {
       case FULL if isIncrementalRefreshing(indexName) =>
         throw new IllegalStateException(
           s"Index $indexName is incremental refreshing and cannot be manual refreshed")
       case FULL =>
-        writeFlintIndex(
-          spark.read
-            .table(tableName))
+        index
+          .buildBatch(spark, flintSparkConf)
+          .format(FLINT_DATASOURCE)
+          .options(flintSparkConf.properties)
+          .mode(Overwrite)
+          .save(indexName)
         None
 
       case INCREMENTAL =>
-        // TODO: Use Foreach sink for now. Need to move this to FlintSparkSkippingIndex
-        //  once finalized. Otherwise, covering index/MV may have different logic.
-        val job = spark.readStream
-          .table(tableName)
-          .writeStream
-          .queryName(indexName)
-          .outputMode(Append())
+        val job =
+          index
+            .buildStream(spark, flintSparkConf)
+            .queryName(indexName)
+            .outputMode(Append())
+
+        if (index.kind != SKIPPING_INDEX_TYPE) {
+          job
+            .format(FLINT_DATASOURCE)
+            .options(flintSparkConf.properties)
+        }
 
         index.options
           .checkpointLocation()
@@ -150,13 +145,7 @@ class FlintSpark(val spark: SparkSession) {
           .refreshInterval()
           .foreach(interval => job.trigger(Trigger.ProcessingTime(interval)))
 
-        val jobId =
-          job
-            .foreachBatch { (batchDF: DataFrame, _: Long) =>
-              writeFlintIndex(batchDF)
-            }
-            .start()
-            .id
+        val jobId = job.start().id
         Some(jobId.toString)
     }
   }

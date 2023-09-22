@@ -5,6 +5,7 @@
 
 package org.opensearch.flint.spark.covering
 
+import org.apache.spark.sql.flint.config.FlintSparkConf
 import org.json4s.{Formats, NoTypeHints}
 import org.json4s.JsonAST.{JArray, JObject, JString}
 import org.json4s.native.JsonMethods.{compact, parse, render}
@@ -13,10 +14,10 @@ import org.opensearch.flint.core.metadata.FlintMetadata
 import org.opensearch.flint.spark.{FlintSpark, FlintSparkIndex, FlintSparkIndexBuilder, FlintSparkIndexOptions}
 import org.opensearch.flint.spark.FlintSparkIndex.flintIndexNamePrefix
 import org.opensearch.flint.spark.FlintSparkIndexOptions.empty
-import org.opensearch.flint.spark.covering.FlintSparkCoveringIndex.{getFlintIndexName, COVERING_INDEX_TYPE}
-
-import org.apache.spark.sql.DataFrame
+import org.opensearch.flint.spark.covering.FlintSparkCoveringIndex.{COVERING_INDEX_TYPE, getFlintIndexName}
+import org.apache.spark.sql.{DataFrameWriter, Row, SparkSession}
 import org.apache.spark.sql.flint.datatype.FlintDataType
+import org.apache.spark.sql.streaming.DataStreamWriter
 import org.apache.spark.sql.types.StructType
 
 /**
@@ -59,9 +60,20 @@ class FlintSparkCoveringIndex(
         |""".stripMargin)
   }
 
-  override def build(df: DataFrame): DataFrame = {
+  override def buildBatch(spark: SparkSession, conf: FlintSparkConf): DataFrameWriter[Row] = {
     val colNames = indexedColumns.keys.toSeq
-    df.select(colNames.head, colNames.tail: _*)
+    spark.read
+      .table(tableName)
+      .select(colNames.head, colNames.tail: _*)
+      .write
+  }
+
+  override def buildStream(spark: SparkSession, conf: FlintSparkConf): DataStreamWriter[Row] = {
+    val colNames = indexedColumns.keys.toSeq
+    spark.readStream
+      .table(tableName)
+      .select(colNames.head, colNames.tail: _*)
+      .writeStream
   }
 
   // TODO: refactor all these once Flint metadata spec finalized

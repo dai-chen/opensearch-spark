@@ -12,10 +12,18 @@ import org.json4s.native.Serialization
 import org.opensearch.flint.core.metadata.FlintMetadata
 import org.opensearch.flint.spark.{FlintSpark, FlintSparkIndex, FlintSparkIndexBuilder, FlintSparkIndexOptions}
 import org.opensearch.flint.spark.FlintSparkIndexOptions.empty
+import org.opensearch.flint.spark.function.TumbleFunction
 import org.opensearch.flint.spark.mv.FlintSparkMaterializedView.{getFlintIndexName, MV_INDEX_TYPE}
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{DataFrameWriter, Row, SparkSession}
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedFunction, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, EventTimeWatermark}
+import org.apache.spark.sql.catalyst.util.IntervalUtils
+import org.apache.spark.sql.flint.{dataFrameToLogicalPlan, logicalPlanToDataFrame}
+import org.apache.spark.sql.flint.config.FlintSparkConf
 import org.apache.spark.sql.flint.datatype.FlintDataType
+import org.apache.spark.sql.streaming.DataStreamWriter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -57,6 +65,42 @@ case class FlintSparkMaterializedView(
          | }
          |""".stripMargin)
 
+  override def buildBatch(spark: SparkSession, conf: FlintSparkConf): DataFrameWriter[Row] = {
+    spark.sql(query).write
+  }
+
+  override def buildStream(spark: SparkSession, conf: FlintSparkConf): DataStreamWriter[Row] = {
+    val batchPlan = dataFrameToLogicalPlan(spark.sql(query))
+    val streamingPlan = batchPlan transform {
+
+      // Insert watermark operator between Aggregate and its child
+      case Aggregate(grouping, agg, child) =>
+        val timeCol = grouping.collect {
+          case UnresolvedFunction(identifier, args, _, _, _)
+              if identifier.mkString(".") == TumbleFunction.identifier.funcName =>
+            args.head
+        }
+
+        if (timeCol.isEmpty) {
+          throw new IllegalStateException(
+            "Windowing function is required for streaming aggregation")
+        }
+        Aggregate(
+          grouping,
+          agg,
+          EventTimeWatermark(
+            timeCol.head.asInstanceOf[Attribute],
+            IntervalUtils.stringToInterval(watermarkDelay),
+            child))
+
+      // Reset isStreaming flag in relation to true
+      case UnresolvedRelation(multipartIdentifier, options, _) =>
+        UnresolvedRelation(multipartIdentifier, options, isStreaming = true)
+    }
+
+    logicalPlanToDataFrame(spark, streamingPlan).writeStream
+  }
+
   private def getMetaInfo: String = {
     val objects = outputSchema.map { case (colName, colType) =>
       JObject("columnName" -> JString(colName), "columnType" -> JString(colType))
@@ -79,10 +123,6 @@ case class FlintSparkMaterializedView(
         .mkString(",")
     val properties = FlintDataType.serialize(StructType.fromDDL(catalogDDL))
     compact(render(parse(properties) \ "properties"))
-  }
-
-  override def build(df: DataFrame): DataFrame = {
-    null
   }
 }
 

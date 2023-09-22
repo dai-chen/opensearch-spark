@@ -7,7 +7,9 @@ package org.opensearch.flint.spark
 
 import org.opensearch.flint.core.metadata.FlintMetadata
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{DataFrameWriter, Row, SparkSession}
+import org.apache.spark.sql.flint.config.FlintSparkConf
+import org.apache.spark.sql.streaming.DataStreamWriter
 
 /**
  * Flint index interface in Spark.
@@ -45,7 +47,9 @@ trait FlintSparkIndex {
    * @return
    *   index building data frame
    */
-  def build(df: DataFrame): DataFrame
+  def buildBatch(spark: SparkSession, conf: FlintSparkConf): DataFrameWriter[Row]
+
+  def buildStream(spark: SparkSession, conf: FlintSparkConf): DataStreamWriter[Row]
 }
 
 object FlintSparkIndex {
