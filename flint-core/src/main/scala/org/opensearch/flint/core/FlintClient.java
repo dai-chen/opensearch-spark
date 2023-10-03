@@ -48,6 +48,8 @@ public interface FlintClient {
    */
   FlintMetadata getIndexMetadata(String indexName);
 
+  void updateIndexMetadata(String indexName, FlintMetadata metadata);
+
   /**
    * Delete a Flint index.
    *

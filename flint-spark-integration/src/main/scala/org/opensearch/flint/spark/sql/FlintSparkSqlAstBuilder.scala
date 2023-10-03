@@ -7,10 +7,12 @@ package org.opensearch.flint.spark.sql
 
 import org.antlr.v4.runtime.tree.{ParseTree, RuleNode}
 import org.opensearch.flint.spark.FlintSpark
+import org.opensearch.flint.spark.FlintSpark.RefreshMode.INCREMENTAL
+import org.opensearch.flint.spark.sql.FlintSparkSqlExtensionsParser.RecoverIndexJobStatementContext
 import org.opensearch.flint.spark.sql.covering.FlintSparkCoveringIndexAstBuilder
 import org.opensearch.flint.spark.sql.skipping.FlintSparkSkippingIndexAstBuilder
 
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 import org.apache.spark.sql.flint.qualifyTableName
 
 /**
@@ -26,6 +28,18 @@ class FlintSparkSqlAstBuilder
   override def visit(tree: ParseTree): LogicalPlan = {
     tree.accept(this).asInstanceOf[LogicalPlan]
   }
+
+  override def visitRecoverIndexJobStatement(ctx: RecoverIndexJobStatementContext): Command =
+    FlintSparkSqlCommand() { flint =>
+      val flintIndexName = ctx.identifier().getText
+      val index = flint
+        .describeIndex(flintIndexName)
+        .getOrElse(throw new IllegalStateException(s"Flint index $flintIndexName doesn't exist"))
+
+      flint.updateIndex(index)
+      flint.refreshIndex(flintIndexName, INCREMENTAL)
+      Seq.empty
+    }
 
   override def aggregateResult(aggregate: AnyRef, nextResult: AnyRef): AnyRef =
     if (nextResult != null) nextResult else aggregate

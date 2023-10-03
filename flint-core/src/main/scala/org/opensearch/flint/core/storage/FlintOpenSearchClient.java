@@ -22,6 +22,7 @@ import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
+import org.opensearch.action.support.master.AcknowledgedResponse;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestClientBuilder;
@@ -30,6 +31,7 @@ import org.opensearch.client.indices.CreateIndexRequest;
 import org.opensearch.client.indices.GetIndexRequest;
 import org.opensearch.client.indices.GetMappingsRequest;
 import org.opensearch.client.indices.GetMappingsResponse;
+import org.opensearch.client.indices.PutMappingRequest;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
@@ -106,6 +108,20 @@ public class FlintOpenSearchClient implements FlintClient {
       return new FlintMetadata(mapping.source().string());
     } catch (Exception e) {
       throw new IllegalStateException("Failed to get Flint index metadata for " + indexName, e);
+    }
+  }
+
+  @Override public void updateIndexMetadata(String indexName, FlintMetadata metadata) {
+    // scalastyle:off println
+    System.out.println("Updating metadata for index: " + metadata.getContent());
+    // scalastyle:on println
+
+    try (RestHighLevelClient client = createClient()) {
+      PutMappingRequest request = new PutMappingRequest(indexName);
+      request.source(metadata.getContent(), XContentType.JSON);
+      client.indices().putMapping(request, RequestOptions.DEFAULT); // Ignore ACK
+    } catch (Exception e) {
+      throw new IllegalStateException("Failed to update Flint index metadata for " + indexName, e);
     }
   }
 

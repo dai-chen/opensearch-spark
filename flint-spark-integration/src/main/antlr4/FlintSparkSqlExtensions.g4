@@ -17,6 +17,7 @@ singleStatement
 statement
     : skippingIndexStatement
     | coveringIndexStatement
+    | recoverIndexJobStatement
     ;
 
 skippingIndexStatement
@@ -74,6 +75,10 @@ describeCoveringIndexStatement
 
 dropCoveringIndexStatement
     : DROP INDEX indexName ON tableName
+    ;
+
+recoverIndexJobStatement
+    : RECOVER INDEX JOB identifier
     ;
 
 indexColTypeList

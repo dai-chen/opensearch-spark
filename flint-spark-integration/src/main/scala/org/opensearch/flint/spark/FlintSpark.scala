@@ -182,6 +182,10 @@ class FlintSpark(val spark: SparkSession) {
     }
   }
 
+  def updateIndex(index: FlintSparkIndex): Unit = {
+    flintClient.updateIndexMetadata(index.name(), index.metadata())
+  }
+
   /**
    * Delete index and refreshing job associated.
    *

@@ -36,7 +36,9 @@ import org.apache.spark.sql.types.StructType
 class FlintSparkSkippingIndex(
     tableName: String,
     val indexedColumns: Seq[FlintSparkSkippingStrategy],
-    override val options: FlintSparkIndexOptions = empty)
+    override val options: FlintSparkIndexOptions = empty,
+    val appId: String = "",
+    val jobId: String = "")
     extends FlintSparkIndex {
 
   require(indexedColumns.nonEmpty, "indexed columns must not be empty")
@@ -59,7 +61,13 @@ class FlintSparkSkippingIndex(
         |     "kind": "$SKIPPING_INDEX_TYPE",
         |     "indexedColumns": $getMetaInfo,
         |     "source": "$tableName",
-        |     "options": $getIndexOptions
+        |     "options": $getIndexOptions,
+        |     "properties": {
+        |       "env": {
+        |         "SERVERLESS_EMR_VIRTUAL_CLUSTER_ID": "${System.getenv("SERVERLESS_EMR_VIRTUAL_CLUSTER_ID")}",
+        |         "SERVERLESS_EMR_JOB_ID": "${System.getenv("SERVERLESS_EMR_JOB_ID")}"
+        |       }
+        |     }
         |   },
         |   "properties": $getSchema
         | }
@@ -200,8 +208,20 @@ object FlintSparkSkippingIndex {
       this
     }
 
-    override def buildIndex(): FlintSparkIndex =
+    override def buildIndex(): FlintSparkIndex = {
+      // scalastyle:off println
+      // flint.spark.conf.getAll.foreach { case (key, value) =>
+      //  println(s"$key = $value")
+      // }
+
+      // println(System.getenv())
+      // scalastyle:on println
+
+      // val appId = System.getenv("SERVERLESS_EMR_VIRTUAL_CLUSTER_ID")
+      // val jobId = System.getenv("SERVERLESS_EMR_JOB_ID")
+
       new FlintSparkSkippingIndex(tableName, indexedColumns, indexOptions)
+    }
 
     private def addIndexedColumn(indexedCol: FlintSparkSkippingStrategy): Unit = {
       require(
