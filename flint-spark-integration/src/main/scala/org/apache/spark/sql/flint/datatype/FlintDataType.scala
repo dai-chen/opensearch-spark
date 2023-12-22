@@ -50,6 +50,8 @@ object FlintDataType {
   def deserializeFiled(fieldName: String, fieldProperties: JValue): StructField = {
     val metadataBuilder = new MetadataBuilder()
     val dataType = fieldProperties \ "type" match {
+      case JString("binary") => BinaryType
+
       // boolean
       case JString("boolean") => BooleanType
 
@@ -119,6 +121,8 @@ object FlintDataType {
   def serializeField(structField: StructField): JField = {
     val metadata = structField.metadata
     val dataType = structField.dataType match {
+      case BinaryType => JObject("type" -> JString("binary"))
+
       // boolean
       case BooleanType => JObject("type" -> JString("boolean"))
 
