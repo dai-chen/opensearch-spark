@@ -7,12 +7,15 @@ package org.opensearch.flint.spark
 
 import com.stephenn.scalatest.jsonassert.JsonMatchers.matchJson
 import org.json4s.native.JsonMethods._
+import org.opensearch.client.RequestOptions
 import org.opensearch.flint.core.FlintVersion.current
 import org.opensearch.flint.spark.FlintSpark.RefreshMode.{FULL, INCREMENTAL}
 import org.opensearch.flint.spark.FlintSparkIndex.ID_COLUMN
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingFileIndex
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex.getSkippingIndexName
 import org.opensearch.flint.spark.skipping.valueset.ValueSetSkippingStrategy
+import org.opensearch.index.query.QueryBuilders
+import org.opensearch.index.reindex.DeleteByQueryRequest
 import org.scalatest.matchers.{Matcher, MatchResult}
 import org.scalatest.matchers.must.Matchers._
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
@@ -169,6 +172,35 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
   }
 
   test("incremental refresh skipping index successfully") {
+    // Incremental refresh requires checkpoint
+    withTempDir { checkpointDir =>
+      flint
+        .skippingIndex()
+        .onTable(testTable)
+        .addPartitions("year", "month")
+        .options(FlintSparkIndexOptions(
+          Map("incremental" -> "true", "checkpoint_location" -> checkpointDir.getAbsolutePath)))
+        .create()
+
+      flint.refreshIndex(testIndex, FULL) shouldBe empty
+      flint.queryIndex(testIndex).collect().toSet should have size 2
+
+      // Delete all index data intentionally and generate a new source file
+      openSearchClient.deleteByQuery(
+        new DeleteByQueryRequest(testIndex).setQuery(QueryBuilders.matchAllQuery()),
+        RequestOptions.DEFAULT)
+      sql(s"""
+           | INSERT INTO $testTable
+           | PARTITION (year=2023, month=4)
+           | VALUES ('Hello', 35, 'Vancouver')
+           | """.stripMargin)
+
+      flint.refreshIndex(testIndex, FULL) shouldBe empty
+      flint.queryIndex(testIndex).collect().toSet should have size 1
+    }
+  }
+
+  test("auto refresh skipping index successfully") {
     // Create Flint index and wait for complete
     flint
       .skippingIndex()

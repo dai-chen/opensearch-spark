@@ -321,9 +321,6 @@ class FlintSpark(val spark: SparkSession) extends Logging {
     spark.read.format(FLINT_DATASOURCE).load(indexName)
   }
 
-  private def isIncrementalRefreshing(indexName: String): Boolean =
-    spark.streams.active.exists(_.name == indexName)
-
   private def stopRefreshingJob(indexName: String): Unit = {
     logInfo(s"Terminating refreshing job $indexName")
     val job = spark.streams.active.find(_.name == indexName)

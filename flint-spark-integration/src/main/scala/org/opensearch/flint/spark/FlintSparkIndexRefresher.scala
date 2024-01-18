@@ -82,14 +82,13 @@ class FlintSparkIndexRefresher(spark: SparkSession, flintSparkConf: FlintSparkCo
       case MANUAL =>
         logInfo("Start refreshing index in batch style")
         if (options.incremental()) {
-          batchRefresh()
-          None
-        } else {
           // Wait for Spark streaming job complete
           val job = streamingRefresh()
           job.awaitTermination()
-          Some(job.id.toString)
+        } else {
+          batchRefresh()
         }
+        None
       case AUTO =>
         val job = streamingRefresh()
         Some(job.id.toString)
@@ -106,6 +105,7 @@ class FlintSparkIndexRefresher(spark: SparkSession, flintSparkConf: FlintSparkCo
       dataStream
         .addCheckpointLocation(options.checkpointLocation())
         .addRefreshInterval(options.refreshInterval())
+        .addAvailableNowTrigger(options.incremental())
         .addOutputMode(options.outputMode())
         .options(options.extraSinkOptions())
     }
@@ -124,6 +124,14 @@ class FlintSparkIndexRefresher(spark: SparkSession, flintSparkConf: FlintSparkCo
       refreshInterval
         .map(interval => dataStream.trigger(Trigger.ProcessingTime(interval)))
         .getOrElse(dataStream)
+    }
+
+    def addAvailableNowTrigger(incremental: Boolean): DataStreamWriter[Row] = {
+      if (incremental) {
+        dataStream.trigger(Trigger.AvailableNow())
+      } else {
+        dataStream
+      }
     }
 
     def addOutputMode(outputMode: Option[String]): DataStreamWriter[Row] = {
