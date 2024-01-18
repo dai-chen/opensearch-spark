@@ -160,7 +160,7 @@ class FlintSpark(val spark: SparkSession) extends Logging {
             latest
           }
         })
-        .commit(_ => flintIndexRefresher.start(indexName, index, mode))
+        .commit(_ => flintIndexRefresher.start(indexName, index))
     } catch {
       case e: Exception =>
         logError("Failed to refresh Flint index", e)
@@ -294,7 +294,7 @@ class FlintSpark(val spark: SparkSession) extends Logging {
             flintIndexMonitor.startMonitor(indexName)
             latest.copy(state = REFRESHING)
           })
-          .commit(_ => flintIndexRefresher.start(indexName, index.get, INCREMENTAL))
+          .commit(_ => flintIndexRefresher.start(indexName, index.get))
 
         logInfo("Recovery complete")
         true

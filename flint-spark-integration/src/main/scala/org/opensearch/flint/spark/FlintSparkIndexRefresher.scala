@@ -5,8 +5,8 @@
 
 package org.opensearch.flint.spark
 
-import org.opensearch.flint.spark.FlintSpark.RefreshMode.{FULL, INCREMENTAL, RefreshMode}
 import org.opensearch.flint.spark.FlintSparkIndex.StreamingRefresh
+import org.opensearch.flint.spark.FlintSparkIndexRefresher.RefreshMode.{AUTO, MANUAL}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
@@ -14,10 +14,10 @@ import org.apache.spark.sql.SaveMode.Overwrite
 import org.apache.spark.sql.flint.FlintDataSourceV2.FLINT_DATASOURCE
 import org.apache.spark.sql.flint.config.FlintSparkConf
 import org.apache.spark.sql.flint.config.FlintSparkConf.CHECKPOINT_MANDATORY
-import org.apache.spark.sql.streaming.{DataStreamWriter, Trigger}
+import org.apache.spark.sql.streaming.{DataStreamWriter, StreamingQuery, Trigger}
 
 /**
- * Flint spark index refresh job.
+ * Flint spark index refresher that builds and starts refreshing job.
  */
 class FlintSparkIndexRefresher(spark: SparkSession, flintSparkConf: FlintSparkConf)
     extends Logging {
@@ -29,15 +29,14 @@ class FlintSparkIndexRefresher(spark: SparkSession, flintSparkConf: FlintSparkCo
    *   Flint index name
    * @param index
    *   Flint index
-   * @param mode
-   *   TODO: remove this
    * @return
    *   refresh job ID
    */
-  def start(indexName: String, index: FlintSparkIndex, mode: RefreshMode): Option[String] = {
-    logInfo(s"Refreshing index $indexName in $mode mode")
+  def start(indexName: String, index: FlintSparkIndex): Option[String] = {
+    logInfo(s"Refreshing index $indexName")
     val options = index.options
     val tableName = index.metadata().source
+    val mode = if (index.options.autoRefresh()) AUTO else MANUAL
 
     // Batch refresh Flint index from the given source data frame
     def batchRefresh(df: Option[DataFrame] = None): Unit = {
@@ -50,22 +49,12 @@ class FlintSparkIndexRefresher(spark: SparkSession, flintSparkConf: FlintSparkCo
         .save(indexName)
     }
 
-    val jobId = mode match {
-      case FULL if isIncrementalRefreshing(indexName) =>
-        throw new IllegalStateException(
-          s"Index $indexName is incremental refreshing and cannot be manual refreshed")
-
-      case FULL =>
-        logInfo("Start refreshing index in batch style")
-        batchRefresh()
-        None
-
-      // Flint index has specialized logic and capability for incremental refresh
-      case INCREMENTAL if index.isInstanceOf[StreamingRefresh] =>
-        logInfo("Start refreshing index in streaming style")
-        val job =
-          index
-            .asInstanceOf[StreamingRefresh]
+    def streamingRefresh(): StreamingQuery = {
+      index match {
+        // Flint index has specialized logic and capability for incremental refresh
+        case refresh: StreamingRefresh =>
+          logInfo("Start refreshing index in streaming style")
+          refresh
             .buildStream(spark)
             .writeStream
             .queryName(indexName)
@@ -73,30 +62,42 @@ class FlintSparkIndexRefresher(spark: SparkSession, flintSparkConf: FlintSparkCo
             .options(flintSparkConf.properties)
             .addSinkOptions(options)
             .start(indexName)
-        Some(job.id.toString)
+        case _ =>
+          // Otherwise, fall back to foreachBatch + batch refresh
+          logInfo("Start refreshing index in foreach streaming style")
+          spark.readStream
+            .options(options.extraSourceOptions(tableName))
+            .table(tableName)
+            .writeStream
+            .queryName(indexName)
+            .addSinkOptions(options)
+            .foreachBatch { (batchDF: DataFrame, _: Long) =>
+              batchRefresh(Some(batchDF))
+            }
+            .start()
+      }
+    }
 
-      // Otherwise, fall back to foreachBatch + batch refresh
-      case INCREMENTAL =>
-        logInfo("Start refreshing index in foreach streaming style")
-        val job = spark.readStream
-          .options(options.extraSourceOptions(tableName))
-          .table(tableName)
-          .writeStream
-          .queryName(indexName)
-          .addSinkOptions(options)
-          .foreachBatch { (batchDF: DataFrame, _: Long) =>
-            batchRefresh(Some(batchDF))
-          }
-          .start()
+    val jobId = mode match {
+      case MANUAL =>
+        logInfo("Start refreshing index in batch style")
+        if (options.incremental()) {
+          batchRefresh()
+          None
+        } else {
+          // Wait for Spark streaming job complete
+          val job = streamingRefresh()
+          job.awaitTermination()
+          Some(job.id.toString)
+        }
+      case AUTO =>
+        val job = streamingRefresh()
         Some(job.id.toString)
     }
 
     logInfo("Refresh index complete")
     jobId
   }
-
-  private def isIncrementalRefreshing(indexName: String): Boolean =
-    spark.streams.active.exists(_.name == indexName)
 
   // Using Scala implicit class to avoid breaking method chaining of Spark data frame fluent API
   private implicit class FlintDataStreamWriter(val dataStream: DataStreamWriter[Row]) {
@@ -128,5 +129,17 @@ class FlintSparkIndexRefresher(spark: SparkSession, flintSparkConf: FlintSparkCo
     def addOutputMode(outputMode: Option[String]): DataStreamWriter[Row] = {
       outputMode.map(dataStream.outputMode).getOrElse(dataStream)
     }
+  }
+}
+
+object FlintSparkIndexRefresher {
+
+  /**
+   * Index refresh mode: FULL: refresh on current source data in batch style at one shot
+   * INCREMENTAL: auto refresh on new data in continuous streaming style
+   */
+  object RefreshMode extends Enumeration {
+    type RefreshMode = Value
+    val MANUAL, AUTO = Value
   }
 }
