@@ -13,15 +13,15 @@ import org.opensearch.flint.spark.FlintSparkIndex.ID_COLUMN
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingFileIndex
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex.getSkippingIndexName
 import org.opensearch.flint.spark.skipping.valueset.ValueSetSkippingStrategy
-import org.scalatest.matchers.{Matcher, MatchResult}
+import org.scalatest.matchers.{MatchResult, Matcher}
 import org.scalatest.matchers.must.Matchers._
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
-
 import org.apache.spark.sql.{Column, Row}
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
-import org.apache.spark.sql.execution.datasources.HadoopFsRelation
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.flint.config.FlintSparkConf._
 import org.apache.spark.sql.functions.{col, isnull}
+import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.resolveExprString
 
 class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
 
@@ -659,7 +659,7 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
     sql(s"""
            | CREATE TABLE $testTable
            | (
-           |   boolean_col BOOLEAN,
+           |   int_col INT,
            |   struct_col STRUCT<field1: STRUCT<subfield:STRING>, field2: INT>
            | )
            | USING JSON
@@ -667,7 +667,7 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
     sql(s"""
            | INSERT INTO $testTable
            | VALUES (
-           |   TRUE,
+           |   30,
            |   STRUCT(STRUCT("subfieldValue1"),123)
            | )
            |""".stripMargin)
@@ -679,17 +679,19 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
       .create()
     flint.refreshIndex(testIndex, FULL)
 
-    /*
     val query = sql(s"""
                        | SELECT struct_col
                        | FROM $testTable
                        | WHERE struct_col.field1.subfield = "subfieldValue1"
                        |""".stripMargin)
 
+    val relation = query.queryExecution.analyzed.find(_.isInstanceOf[LogicalRelation]).get
+    val indexCol = new Column(resolveExprString("struct_col.field1.subfield", relation))
+
     query.queryExecution.executedPlan should
       useFlintSparkSkippingFileIndex(
-        hasIndexFilter(col("struct_col.subfield1") === "subfieldValue1"))
-     */
+        hasIndexFilter(isnull(indexCol) || indexCol === "subfieldValue1"))
+    checkAnswer(query, Seq(Row(30)))
 
     flint.deleteIndex(testIndex)
   }
