@@ -689,11 +689,10 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
     val relation = query.queryExecution.analyzed.find(_.isInstanceOf[LogicalRelation]).get
     val indexCol = new Column(resolveExprString("struct_col.field1.subfield", relation))
 
-    /*
     query.queryExecution.executedPlan should
       useFlintSparkSkippingFileIndex(
-        hasIndexFilter(isnull(indexCol) || indexCol === "subfieldValue1"))
-     */
+        hasIndexFilter(isnull(col("struct_col.field1.subfield")) || col(
+          "struct_col.field1.subfield") === "subfieldValue2"))
     checkAnswer(query, Seq(Row(40)))
 
     flint.deleteIndex(testIndex)
