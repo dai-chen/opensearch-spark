@@ -5,13 +5,16 @@
 
 package org.opensearch.flint.spark.skipping
 
+import java.util.UUID
+
 import org.json4s.CustomSerializer
 import org.json4s.JsonAST.JString
 import org.opensearch.flint.spark.FlintSparkOptimizer.withFlintOptimizerDisabled
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.SkippingKind.SkippingKind
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.resolveExprString
+
 import org.apache.spark.sql.{Column, SparkSession}
-import org.apache.spark.sql.catalyst.expressions.{And, Expression, Predicate, UnaryExpression, Unevaluable}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Expression, ExprId, Predicate, UnaryExpression, Unevaluable}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan}
 
 /**
@@ -136,13 +139,21 @@ object FlintSparkSkippingStrategy {
    * @param indexExpr
    *   index expression in a skipping indexed column
    */
-  case class IndexColumnExtractor(indexExpr: Expression) {
+  case class IndexColumnExtractor(indexExprStr: String, indexExpr: Expression) {
 
     def unapply(expr: Expression): Option[Column] = {
       if (expr.semanticEquals(indexExpr)) {
-        Some(new Column(expr.canonicalized))
+        val sessionState = SparkSession.active.sessionState
+        val unresolvedExpr = sessionState.sqlParser.parseExpression(indexExprStr)
+        Some(new Column(unresolvedExpr))
       } else {
         None
+      }
+    }
+
+    private def normalize(expr: Expression): Expression = {
+      expr.transformUp { case a: Attribute =>
+        a.withExprId(ExprId(0, new UUID(0, 0))).withQualifier(Nil)
       }
     }
   }

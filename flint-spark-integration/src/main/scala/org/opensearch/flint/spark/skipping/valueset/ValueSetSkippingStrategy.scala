@@ -37,7 +37,7 @@ case class ValueSetSkippingStrategy(
   override def doRewritePredicate(
       predicate: Expression,
       indexExpr: Expression): Option[Expression] = {
-    val extractor = IndexColumnExtractor(indexExpr)
+    val extractor = IndexColumnExtractor(columnName, indexExpr)
 
     /*
      * This is supposed to be rewritten to ARRAY_CONTAINS(columName, value).
