@@ -14,7 +14,7 @@ import org.json4s.native.Serialization
 import org.opensearch.flint.core.FlintOptions
 import org.opensearch.flint.core.storage.FlintOpenSearchClient
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex.getSkippingIndexName
-import org.scalatest.matchers.must.Matchers.{defined, have}
+import org.scalatest.matchers.must.Matchers.defined
 import org.scalatest.matchers.should.Matchers.{convertToAnyShouldWrapper, the}
 
 import org.apache.spark.sql.Row
@@ -37,6 +37,29 @@ class FlintSparkSkippingIndexSqlITSuite extends FlintSparkSuite {
     super.afterEach()
 
     flint.deleteIndex(testIndex)
+  }
+
+  test("create bloom filter skipping index with auto refresh") {
+    sql(s"""
+           | CREATE SKIPPING INDEX ON $testTable
+           | (
+           |   age BLOOM_FILTER
+           | )
+           | WITH (auto_refresh = true)
+           | """.stripMargin)
+
+    // Wait for streaming job complete current micro batch
+    val job = spark.streams.active.find(_.name == testIndex)
+    job shouldBe defined
+    failAfter(streamingTimeout) {
+      job.get.processAllAvailable()
+    }
+
+    val indexData = spark.read.format(FLINT_DATASOURCE).load(testIndex)
+    flint.describeIndex(testIndex) shouldBe defined
+    indexData.count() shouldBe 2
+
+    checkAnswer(sql(s"SELECT name FROM $testTable WHERE age = 25"), Row("World"))
   }
 
   test("create skipping index with auto refresh") {

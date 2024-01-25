@@ -12,6 +12,7 @@ import org.opensearch.flint.spark._
 import org.opensearch.flint.spark.FlintSparkIndex._
 import org.opensearch.flint.spark.FlintSparkIndexOptions.empty
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex.{getSkippingIndexName, FILE_PATH_COLUMN, SKIPPING_INDEX_TYPE}
+import org.opensearch.flint.spark.skipping.bloomfilter.BloomFilterSkippingStrategy
 import org.opensearch.flint.spark.skipping.minmax.MinMaxSkippingStrategy
 import org.opensearch.flint.spark.skipping.partition.PartitionSkippingStrategy
 import org.opensearch.flint.spark.skipping.valueset.ValueSetSkippingStrategy
@@ -178,6 +179,14 @@ object FlintSparkSkippingIndex {
       val col = findColumn(colName)
       indexedColumns =
         indexedColumns :+ MinMaxSkippingStrategy(columnName = col.name, columnType = col.dataType)
+      this
+    }
+
+    def addBloomFilter(colName: String): Builder = {
+      val col = findColumn(colName)
+      indexedColumns = indexedColumns :+ BloomFilterSkippingStrategy(
+        columnName = col.name,
+        columnType = col.dataType)
       this
     }
 

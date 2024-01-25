@@ -153,7 +153,7 @@ indexColTypeList
     ;
 
 indexColType
-    : identifier skipType=(PARTITION | VALUE_SET | MIN_MAX)
+    : identifier skipType=(PARTITION | VALUE_SET | MIN_MAX | BLOOM_FILTER)
     ;
 
 indexName

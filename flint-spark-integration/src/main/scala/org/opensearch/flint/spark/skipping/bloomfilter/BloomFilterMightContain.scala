@@ -6,10 +6,9 @@
 package org.opensearch.flint.spark.skipping.bloomfilter
 
 import java.io.ByteArrayInputStream
-
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
-import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, Expression}
+import org.apache.spark.sql.catalyst.expressions.{BinaryComparison, BinaryExpression, Expression}
 import org.apache.spark.sql.catalyst.expressions.codegen._
 import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
 import org.apache.spark.sql.types._
@@ -28,13 +27,15 @@ import org.apache.spark.util.sketch.BloomFilter
  *   the Long value to be tested for the membership of `bloomFilterExpression`.
  */
 case class BloomFilterMightContain(bloomFilterExpression: Expression, valueExpression: Expression)
-    extends BinaryExpression {
+    extends BinaryComparison {
 
   override def nullable: Boolean = true
   override def left: Expression = bloomFilterExpression
   override def right: Expression = valueExpression
-  override def prettyName: String = "might_contain"
+  override def prettyName: String = "might_contains"
   override def dataType: DataType = BooleanType
+
+  override def symbol: String = "MIGHT_CONTAINS"
 
   override def checkInputDataTypes(): TypeCheckResult = TypeCheckResult.TypeCheckSuccess
 

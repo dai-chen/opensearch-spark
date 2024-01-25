@@ -10,7 +10,7 @@ import org.opensearch.flint.spark.FlintSpark
 import org.opensearch.flint.spark.FlintSpark.RefreshMode
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.SkippingKind
-import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.SkippingKind.{MIN_MAX, PARTITION, VALUE_SET}
+import org.opensearch.flint.spark.skipping.FlintSparkSkippingStrategy.SkippingKind.{BLOOM_FILTER, MIN_MAX, PARTITION, VALUE_SET}
 import org.opensearch.flint.spark.sql.{FlintSparkSqlCommand, FlintSparkSqlExtensionsVisitor, SparkSqlAstBuilder}
 import org.opensearch.flint.spark.sql.FlintSparkSqlAstBuilder.{getFullTableName, getSqlText}
 import org.opensearch.flint.spark.sql.FlintSparkSqlExtensionsParser._
@@ -47,6 +47,7 @@ trait FlintSparkSkippingIndexAstBuilder extends FlintSparkSqlExtensionsVisitor[A
           case PARTITION => indexBuilder.addPartitions(colName)
           case VALUE_SET => indexBuilder.addValueSet(colName)
           case MIN_MAX => indexBuilder.addMinMax(colName)
+          case BLOOM_FILTER => indexBuilder.addBloomFilter(colName)
         }
       }
 
