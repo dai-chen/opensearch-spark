@@ -39,35 +39,29 @@ BytesRef bfBytes = doc[params.fieldName].value;
 byte[] buf = bfBytes.bytes;
 int pos = 0;
 int count = buf.length;
-// int version = dis.readInt();
 int ch1 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 int ch2 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 int ch3 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 int ch4 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 int version = ((ch1 << 24) + (ch2 << 16) + (ch3 << 8) + (ch4 << 0));
-// int numHashFunctions = dis.readInt();
 ch1 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 ch2 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 ch3 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 ch4 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 int numHashFunctions = ((ch1 << 24) + (ch2 << 16) + (ch3 << 8) + (ch4 << 0));
-// int numWords = dis.readInt();
 ch1 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 ch2 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 ch3 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 ch4 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;
 int numWords = ((ch1 << 24) + (ch2 << 16) + (ch3 << 8) + (ch4 << 0));
 
-// Create BitArray internally
 long[] data = new long[numWords];
 byte[] readBuffer = new byte[8];
 for (int i = 0; i < numWords; i++) {
 
-// data[i] = dis.readLong()
 int n = 0;
 while (n < 8) {
 int count2;
-// int count2 = in.read(readBuffer, off + n, len - n);
 int off = n;
 int len = 8 - n;
 if (pos >= count) {
@@ -101,7 +95,6 @@ for (long word : data) {
 bitCount += Long.bitCount(word);
 }
 
-// BloomFilterImpl.mightContainLong(item)
 long item = params.value;
 int h1 = hashLong(item, 0);
 int h2 = hashLong(item, h1);
@@ -109,7 +102,6 @@ int h2 = hashLong(item, h1);
 long bitSize = (long) data.length * Long.SIZE;
 for (int i = 1; i <= numHashFunctions; i++) {
 int combinedHash = h1 + (i * h2);
-// Flip all the bits if it's negative (guaranteed positive number)
 if (combinedHash < 0) {
 combinedHash = ~combinedHash;
 }

@@ -5,6 +5,8 @@
 
 package org.apache.spark.sql.flint.storage
 
+import scala.io.Source
+
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.util.{DateTimeUtils, TimestampFormatter}
 import org.apache.spark.sql.connector.expressions.{Expression, FieldReference, LiteralValue}
@@ -113,6 +115,7 @@ case class FlintQueryCompiler(schema: StructType) {
             p.children()(1),
             false)}"}}}"""
       case "MIGHT_CONTAINS" =>
+        val code = Source.fromResource("bloom_filter_query.txt").getLines().mkString(" ")
         s"""
            |{
            |    "bool": {
@@ -120,7 +123,7 @@ case class FlintQueryCompiler(schema: StructType) {
            |        "script": {
            |          "script": {
            |            "lang": "painless",
-           |            "source": "int hashLong(long input, int seed) {    int low = (int) input;    int high = (int) (input >>> 32);    int k1 = mixK1(low);    int h1 = mixH1(seed, k1);    k1 = mixK1(high);    h1 = mixH1(h1, k1);    return fmix(h1, 8);} int mixK1(int k1) {    k1 *= 0xcc9e2d51L;    k1 = Integer.rotateLeft(k1, 15);    k1 *= 0x1b873593L;    return k1;} int mixH1(int h1, int k1) {    h1 ^= k1;    h1 = Integer.rotateLeft(h1, 13);    h1 = h1 * 5 + (int) 0xe6546b64L;    return h1;} int fmix(int h1, int length) {    h1 ^= length;    h1 ^= h1 >>> 16;    h1 *= 0x85ebca6bL;    h1 ^= h1 >>> 13;    h1 *= 0xc2b2ae35L;    h1 ^= h1 >>> 16;    return h1;}BytesRef bf;Bytes = doc[params.fieldName].value;\nbyte[] buf = bfBytes.bytes;\nint pos = 0;\nint count = buf.length;\n// int version = dis.readInt();\nint ch1 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nint ch2 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nint ch3 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nint ch4 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nint version = ((ch1 << 24) + (ch2 << 16) + (ch3 << 8) + (ch4 << 0));\n// int numHashFunctions = dis.readInt();\nch1 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nch2 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nch3 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nch4 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nint numHashFunctions = ((ch1 << 24) + (ch2 << 16) + (ch3 << 8) + (ch4 << 0));\n// int numWords = dis.readInt();\nch1 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nch2 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nch3 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nch4 = (pos < count) ? (buf[pos++] & (int) 0xffL) : -1;\nint numWords = ((ch1 << 24) + (ch2 << 16) + (ch3 << 8) + (ch4 << 0));\n\n// Create BitArray internally\nlong[] data = new long[numWords];\nbyte[] readBuffer = new byte[8];\nfor (int i = 0; i < numWords; i++) {\n\n  // data[i] = dis.readLong()\n  int n = 0;\n  while (n < 8) {\n    int count2;\n    // int count2 = in.read(readBuffer, off + n, len - n);\n    int off = n;\n    int len = 8 - n;\n    if (pos >= count) {\n      count2 = -1;\n    } else {\n      int avail = count - pos;\n      if (len > avail) {\n        len = avail;\n      }\n      if (len <= 0) {\n        count2 = 0;\n      } else {\n        System.arraycopy(buf, pos, readBuffer, off, len);\n        pos += len;\n        count2 = len;\n      }\n    }\n    n += count2;\n  }\n  data[i] = (((long) readBuffer[0] << 56) +\n      ((long) (readBuffer[1] & 255) << 48) +\n      ((long) (readBuffer[2] & 255) << 40) +\n      ((long) (readBuffer[3] & 255) << 32) +\n      ((long) (readBuffer[4] & 255) << 24) +\n      ((readBuffer[5] & 255) << 16) +\n      ((readBuffer[6] & 255) << 8) +\n      ((readBuffer[7] & 255) << 0));\n}\nlong bitCount = 0;\nfor (long word : data) {\n  bitCount += Long.bitCount(word);\n}\n\n// BloomFilterImpl.mightContainLong(item)\nlong item = params.value;\nint h1 = hashLong(item, 0);\nint h2 = hashLong(item, h1);\n\nlong bitSize = (long) data.length * Long.SIZE;\nfor (int i = 1; i <= numHashFunctions; i++) {\n  int combinedHash = h1 + (i * h2);\n  // Flip all the bits if it'\''s negative (guaranteed positive number)\n  if (combinedHash < 0) {\n    combinedHash = ~combinedHash;\n  }\n  if ((data[(int) (combinedHash % bitSize >>> 6)] & (1L << combinedHash % bitSize)) == 0) {\n    return false;\n  }\n}\nreturn true",
+           |            "source": "$code",
            |            "params": {
            |              "fieldName": "${compile(p.children()(0))}",
            |              "value": ${compile(p.children()(1))}

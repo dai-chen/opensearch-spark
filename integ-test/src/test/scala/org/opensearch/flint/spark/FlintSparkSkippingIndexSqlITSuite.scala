@@ -43,7 +43,7 @@ class FlintSparkSkippingIndexSqlITSuite extends FlintSparkSuite {
     sql(s"""
            | CREATE SKIPPING INDEX ON $testTable
            | (
-           |   age BLOOM_FILTER
+           |   address BLOOM_FILTER
            | )
            | WITH (auto_refresh = true)
            | """.stripMargin)
@@ -59,7 +59,9 @@ class FlintSparkSkippingIndexSqlITSuite extends FlintSparkSuite {
     flint.describeIndex(testIndex) shouldBe defined
     indexData.count() shouldBe 2
 
-    checkAnswer(sql(s"SELECT name FROM $testTable WHERE age = 25"), Row("World"))
+    checkAnswer(sql(s"SELECT name FROM $testTable WHERE address = 'Seattle'"), Row("Hello"))
+    checkAnswer(sql(s"SELECT name FROM $testTable WHERE address = 'Portland'"), Row("World"))
+    sql(s"SELECT name FROM $testTable WHERE address = 'Vancouver'").count() shouldBe 0
   }
 
   test("create skipping index with auto refresh") {
