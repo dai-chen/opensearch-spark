@@ -118,7 +118,8 @@ case class BloomFilterAggregate(
 
   override def createAggregationBuffer(): BloomFilter = {
     // BloomFilter.create(estimatedNumItems, numBits)
-    BloomFilter.create(estimatedNumItems)
+    // BloomFilter.create(estimatedNumItems)
+    AdaptiveBloomFilter2.create(estimatedNumItems)
   }
 
   override def update(buffer: BloomFilter, inputRow: InternalRow): BloomFilter = {
@@ -140,7 +141,20 @@ case class BloomFilterAggregate(
       // There's no set bit in the Bloom filter and hence no not-null value is processed.
       return null
     }
-    serialize(buffer)
+
+    // Overflown
+    if (buffer.cardinality() > estimatedNumItems) {
+      return null
+    }
+
+    // Store internal BF when final aggregate result output
+    val bf = buffer.asInstanceOf[AdaptiveBloomFilter2].bloomFilter
+    val size = (bf.bitSize() / 8) + 8
+    require(size <= Integer.MAX_VALUE, s"actual number of bits is too large $size")
+    val out = new ByteArrayOutputStream(size.intValue())
+    bf.writeTo(out)
+    out.close()
+    out.toByteArray
   }
 
   override def withNewMutableAggBufferOffset(newOffset: Int): BloomFilterAggregate =
@@ -162,7 +176,7 @@ object BloomFilterAggregate {
   final def serialize(obj: BloomFilter): Array[Byte] = {
     // BloomFilterImpl.writeTo() writes 2 integers (version number and num hash functions), hence
     // the +8
-    val size = (obj.bitSize() / 8) + 8
+    val size = (obj.bitSize() / 8) + 8 + 4 // write cardinality
     require(size <= Integer.MAX_VALUE, s"actual number of bits is too large $size")
     val out = new ByteArrayOutputStream(size.intValue())
     obj.writeTo(out)
@@ -172,7 +186,8 @@ object BloomFilterAggregate {
 
   final def deserialize(bytes: Array[Byte]): BloomFilter = {
     val in = new ByteArrayInputStream(bytes)
-    val bloomFilter = BloomFilter.readFrom(in)
+    // val bloomFilter = BloomFilter.readFrom(in)
+    val bloomFilter = AdaptiveBloomFilter2.readFrom(in)
     in.close()
     bloomFilter
   }
