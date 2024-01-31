@@ -5,24 +5,16 @@
 
 package org.opensearch.flint.spark.skipping.bloomfilter
 
-import java.io.OutputStream
+import java.io.{DataInputStream, DataOutputStream, InputStream, OutputStream}
 
-import org.opensearch.flint.spark.skipping.bloomfilter.AdaptiveBloomFilter.K
+import org.opensearch.flint.spark.skipping.bloomfilter.AdaptiveBloomFilter.{K, RANGES}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.sketch.BloomFilter
 
-class AdaptiveBloomFilter(val expectedNDV: Long) extends BloomFilter with Logging {
+class AdaptiveBloomFilter(val candidates: Array[BloomFilter]) extends BloomFilter with Logging {
 
   private var total: Long = 0
-
-  private val ranges = Array(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
-
-  // Create an BF array of size 10
-  // Each element is created by BloomFilter.create(expectedNDV)
-  // in which expectedNDV is 1k, 2k, 4k, ... 512k
-  private val candidates: Array[BloomFilter] =
-    (1 to 512).map(_ * K).map(ndv => BloomFilter.create(ndv)).toArray
 
   override def cardinality(): Long = total
 
@@ -30,7 +22,7 @@ class AdaptiveBloomFilter(val expectedNDV: Long) extends BloomFilter with Loggin
   // and meanwhile increment a counter total
   override def expectedFpp(): Double = throw new UnsupportedOperationException
 
-  override def bitSize(): Long = bestCandidate().bitSize()
+  override def bitSize(): Long = candidates.map(_.bitSize()).sum
 
   override def put(item: Any): Boolean = throw new UnsupportedOperationException
 
@@ -55,7 +47,11 @@ class AdaptiveBloomFilter(val expectedNDV: Long) extends BloomFilter with Loggin
   // This is called after each Partial Aggregate complete. So we just care about best candidate ???
   override def mergeInPlace(other: BloomFilter): BloomFilter = {
     total = total + other.cardinality()
-    candidates.foreach(bf => bf.mergeInPlace(other))
+
+    val otherBf = other.asInstanceOf[AdaptiveBloomFilter]
+    for ((bf1, bf2) <- candidates zip otherBf.candidates) {
+      bf1.mergeInPlace(bf2)
+    }
     this
   }
 
@@ -73,23 +69,40 @@ class AdaptiveBloomFilter(val expectedNDV: Long) extends BloomFilter with Loggin
 
   // Check total and choose BF candidate close to but not exceed the total counter
   override def writeTo(out: OutputStream): Unit = {
-    bestCandidate().writeTo(out)
+    candidates.foreach(_.writeTo(out))
+
+    new DataOutputStream(out).writeInt(total.toInt)
   }
 
-  private def bestCandidate(): BloomFilter = {
-    val index = ranges.indexWhere(range => total < range * K)
-    logWarning(
-      s"NDV $total: choose candidate $index whose size is ${candidates(index).bitSize()}")
+  def readFrom(in: InputStream): Unit = {
+    total = new DataInputStream(in).readInt()
+  }
 
+  def bestCandidate(): BloomFilter = {
+    val index = RANGES.indexWhere(range => total < range * K)
     candidates(index)
   }
 }
 
 object AdaptiveBloomFilter {
 
-  val K: Int = 1024;
+  val K: Int = 1024
+
+  /** TODO: generate from input param such as expectedNDV? */
+  val RANGES = Array(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
 
   def create(expectedNDV: Long): BloomFilter = {
-    new AdaptiveBloomFilter(expectedNDV)
+    // Create an BF array of size 10
+    // Each element is created by BloomFilter.create(expectedNDV)
+    // in which expectedNDV is 1k, 2k, 4k, ... 512k
+    val candidates = RANGES.map(_ * K).map(ndv => BloomFilter.create(ndv))
+    new AdaptiveBloomFilter(candidates)
+  }
+
+  def readFrom(in: InputStream): BloomFilter = {
+    val candidates = Array.fill(10)(BloomFilter.readFrom(in))
+    val bloomFilter = new AdaptiveBloomFilter(candidates)
+    bloomFilter.readFrom(in)
+    bloomFilter
   }
 }

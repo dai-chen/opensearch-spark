@@ -119,7 +119,7 @@ case class BloomFilterAggregate(
   override def createAggregationBuffer(): BloomFilter = {
     // BloomFilter.create(estimatedNumItems, numBits)
     // BloomFilter.create(estimatedNumItems)
-    AdaptiveBloomFilter2.create(estimatedNumItems)
+    AdaptiveBloomFilter.create(estimatedNumItems)
   }
 
   override def update(buffer: BloomFilter, inputRow: InternalRow): BloomFilter = {
@@ -143,12 +143,14 @@ case class BloomFilterAggregate(
     }
 
     // Overflown
+    /*
     if (buffer.cardinality() > estimatedNumItems) {
       return null
     }
+     */
 
     // Store internal BF when final aggregate result output
-    val bf = buffer.asInstanceOf[AdaptiveBloomFilter2].bloomFilter
+    val bf = buffer.asInstanceOf[AdaptiveBloomFilter].bestCandidate()
     val size = (bf.bitSize() / 8) + 8
     require(size <= Integer.MAX_VALUE, s"actual number of bits is too large $size")
     val out = new ByteArrayOutputStream(size.intValue())
@@ -187,7 +189,7 @@ object BloomFilterAggregate {
   final def deserialize(bytes: Array[Byte]): BloomFilter = {
     val in = new ByteArrayInputStream(bytes)
     // val bloomFilter = BloomFilter.readFrom(in)
-    val bloomFilter = AdaptiveBloomFilter2.readFrom(in)
+    val bloomFilter = AdaptiveBloomFilter.readFrom(in)
     in.close()
     bloomFilter
   }
