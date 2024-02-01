@@ -95,7 +95,7 @@ object AdaptiveBloomFilter {
     // Create an BF array of size 10
     // Each element is created by BloomFilter.create(expectedNDV)
     // in which expectedNDV is 1k, 2k, 4k, ... 512k
-    val candidates = RANGES.map(_ * K).map(ndv => BloomFilter.create(ndv))
+    val candidates = RANGES.map(_ * K).map(ndv => BloomFilter.create(ndv, 0.01))
     new AdaptiveBloomFilter(candidates)
   }
 
