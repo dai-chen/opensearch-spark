@@ -18,6 +18,7 @@ statement
     : skippingIndexStatement
     | coveringIndexStatement
     | materializedViewStatement
+    | indexManagementStatement
     | indexJobManagementStatement
     ;
 
@@ -25,8 +26,10 @@ skippingIndexStatement
     : createSkippingIndexStatement
     | refreshSkippingIndexStatement
     | describeSkippingIndexStatement
+    | alterSkippingIndexStatement
     | dropSkippingIndexStatement
     | vacuumSkippingIndexStatement
+    | analyzeSkippingIndexStatement
     ;
 
 createSkippingIndexStatement
@@ -45,6 +48,12 @@ describeSkippingIndexStatement
     : (DESC | DESCRIBE) SKIPPING INDEX ON tableName
     ;
 
+alterSkippingIndexStatement
+    : ALTER SKIPPING INDEX
+        ON tableName
+        WITH LEFT_PAREN propertyList RIGHT_PAREN
+    ;
+
 dropSkippingIndexStatement
     : DROP SKIPPING INDEX ON tableName
     ;
@@ -58,6 +67,7 @@ coveringIndexStatement
     | refreshCoveringIndexStatement
     | showCoveringIndexStatement
     | describeCoveringIndexStatement
+    | alterCoveringIndexStatement
     | dropCoveringIndexStatement
     | vacuumCoveringIndexStatement
     ;
@@ -82,6 +92,12 @@ describeCoveringIndexStatement
     : (DESC | DESCRIBE) INDEX indexName ON tableName
     ;
 
+alterCoveringIndexStatement
+    : ALTER INDEX indexName
+        ON tableName
+        WITH LEFT_PAREN propertyList RIGHT_PAREN
+    ;
+
 dropCoveringIndexStatement
     : DROP INDEX indexName ON tableName
     ;
@@ -90,11 +106,16 @@ vacuumCoveringIndexStatement
     : VACUUM INDEX indexName ON tableName
     ;
 
+analyzeSkippingIndexStatement
+    : ANALYZE SKIPPING INDEX ON tableName
+    ;
+
 materializedViewStatement
     : createMaterializedViewStatement
     | refreshMaterializedViewStatement
     | showMaterializedViewStatement
     | describeMaterializedViewStatement
+    | alterMaterializedViewStatement
     | dropMaterializedViewStatement
     | vacuumMaterializedViewStatement
     ;
@@ -117,12 +138,25 @@ describeMaterializedViewStatement
     : (DESC | DESCRIBE) MATERIALIZED VIEW mvName=multipartIdentifier
     ;
 
+alterMaterializedViewStatement
+    : ALTER MATERIALIZED VIEW mvName=multipartIdentifier
+        WITH LEFT_PAREN propertyList RIGHT_PAREN
+    ;
+
 dropMaterializedViewStatement
     : DROP MATERIALIZED VIEW mvName=multipartIdentifier
     ;
 
 vacuumMaterializedViewStatement
     : VACUUM MATERIALIZED VIEW mvName=multipartIdentifier
+    ;
+
+indexManagementStatement
+    : showFlintIndexStatement
+    ;
+
+showFlintIndexStatement
+    : SHOW FLINT (INDEX | INDEXES) IN catalogDb=multipartIdentifier
     ;
 
 indexJobManagementStatement
@@ -154,7 +188,7 @@ indexColTypeList
     ;
 
 indexColType
-    : identifier skipType=(PARTITION | VALUE_SET | MIN_MAX)
+    : identifier skipType=(PARTITION | VALUE_SET | MIN_MAX | BLOOM_FILTER)
         (LEFT_PAREN skipParams RIGHT_PAREN)?
     ;
 

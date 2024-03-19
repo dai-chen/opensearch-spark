@@ -5,6 +5,8 @@
 
 package org.opensearch.flint.spark
 
+import java.util.Base64
+
 import com.stephenn.scalatest.jsonassert.JsonMatchers.matchJson
 import org.json4s.native.JsonMethods._
 import org.opensearch.client.RequestOptions
@@ -12,6 +14,7 @@ import org.opensearch.flint.core.FlintVersion.current
 import org.opensearch.flint.spark.FlintSparkIndex.ID_COLUMN
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingFileIndex
 import org.opensearch.flint.spark.skipping.FlintSparkSkippingIndex.getSkippingIndexName
+import org.opensearch.flint.spark.skipping.bloomfilter.BloomFilterMightContain.bloom_filter_might_contain
 import org.opensearch.index.query.QueryBuilders
 import org.opensearch.index.reindex.DeleteByQueryRequest
 import org.scalatest.matchers.{Matcher, MatchResult}
@@ -19,16 +22,19 @@ import org.scalatest.matchers.must.Matchers._
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 
 import org.apache.spark.sql.{Column, Row}
+import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.flint.config.FlintSparkConf._
-import org.apache.spark.sql.functions.{col, isnull}
+import org.apache.spark.sql.functions.{col, isnull, lit, xxhash64}
+import org.apache.spark.sql.internal.SQLConf
 
 class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
 
   /** Test table and index name */
   private val testTable = "spark_catalog.default.test"
   private val testIndex = getSkippingIndexName(testTable)
+  private val testLatestId = Base64.getEncoder.encodeToString(testIndex.getBytes)
 
   override def beforeEach(): Unit = {
     super.beforeEach()
@@ -88,7 +94,8 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
         |     {
         |        "kind": "BLOOM_FILTER",
         |        "parameters": {
-        |          "num_items": "10000",
+        |          "adaptive": "true",
+        |          "num_candidates": "10",
         |          "fpp": "0.03"
         |        },
         |        "columnName": "name",
@@ -99,6 +106,7 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
         |       "auto_refresh": "false",
         |       "incremental_refresh": "false"
         |     },
+        |     "latestId": "$testLatestId",
         |     "properties": {}
         |   },
         |   "properties": {
@@ -118,7 +126,8 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
         |       "type": "integer"
         |     },
         |     "name" : {
-        |       "type": "binary"
+        |       "type": "binary",
+        |       "doc_values": true
         |     },
         |     "file_path": {
         |       "type": "keyword"
@@ -390,7 +399,24 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
     // Assert index data
     flint.queryIndex(testIndex).collect() should have size 2
 
-    // TODO: Assert query rewrite result
+    // Assert query result and rewrite
+    def assertQueryRewrite(): Unit = {
+      val query = sql(s"SELECT name FROM $testTable WHERE age = 50")
+      checkAnswer(query, Row("Java"))
+      query.queryExecution.executedPlan should
+        useFlintSparkSkippingFileIndex(
+          hasIndexFilter(bloom_filter_might_contain("age", xxhash64(lit(50)))))
+    }
+
+    // Test expression with codegen enabled by default
+    assertQueryRewrite()
+
+    // Test expression evaluation with codegen disabled
+    withSQLConf(
+      SQLConf.WHOLESTAGE_CODEGEN_ENABLED.key -> "false",
+      SQLConf.CODEGEN_FACTORY_MODE.key -> CodegenObjectFactoryMode.NO_CODEGEN.toString) {
+      assertQueryRewrite()
+    }
   }
 
   test("should rewrite applicable query with table name without database specified") {
@@ -474,6 +500,7 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
     // Prepare test table
     val testTable = "spark_catalog.default.data_type_table"
     val testIndex = getSkippingIndexName(testTable)
+    val testLatestId = Base64.getEncoder.encodeToString(testIndex.getBytes)
     sql(s"""
          | CREATE TABLE $testTable
          | (
@@ -622,6 +649,7 @@ class FlintSparkSkippingIndexITSuite extends FlintSparkSuite {
          |       "auto_refresh": "false",
          |       "incremental_refresh": "false"
          |     },
+         |     "latestId": "$testLatestId",
          |     "properties": {}
          |   },
          |   "properties": {

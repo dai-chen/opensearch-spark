@@ -25,7 +25,7 @@ Please see the following example in which Index Building Logic and Query Rewrite
 | Partition      | CREATE SKIPPING INDEX<br>ON alb_logs<br> (<br>&nbsp;&nbsp;year PARTITION,<br>&nbsp;&nbsp;month PARTITION,<br>&nbsp;&nbsp;day PARTITION,<br>&nbsp;&nbsp;hour PARTITION<br>) | INSERT INTO flint_alb_logs_skipping_index<br>SELECT<br>&nbsp;&nbsp;FIRST(year) AS year,<br>&nbsp;&nbsp;FIRST(month) AS month,<br>&nbsp;&nbsp;FIRST(day) AS day,<br>&nbsp;&nbsp;FIRST(hour) AS hour,<br>&nbsp;&nbsp;input_file_name() AS file_path<br>FROM alb_logs<br>GROUP BY<br>&nbsp;&nbsp;input_file_name()         | SELECT *<br>FROM alb_logs<br>WHERE year = 2023 AND month = 4<br>=><br>SELECT *<br>FROM alb_logs (input_files = <br>&nbsp;&nbsp;SELECT file_path<br>&nbsp;&nbsp;FROM flint_alb_logs_skipping_index<br>&nbsp;&nbsp;WHERE year = 2023 AND month = 4<br>)<br>WHERE year = 2023 AND month = 4                                                                          |
 | ValueSet       | CREATE SKIPPING INDEX<br>ON alb_logs<br> (<br>&nbsp;&nbsp;elb_status_code VALUE_SET<br>)                                                                                   | INSERT INTO flint_alb_logs_skipping_index<br>SELECT<br>&nbsp;&nbsp;COLLECT_SET(elb_status_code) AS elb_status_code,<br>&nbsp;&nbsp;input_file_name() AS file_path<br>FROM alb_logs<br>GROUP BY<br>&nbsp;&nbsp;input_file_name()                                                                                         | SELECT *<br>FROM alb_logs<br>WHERE elb_status_code = 404<br>=><br>SELECT *<br>FROM alb_logs (input_files = <br>&nbsp;&nbsp;SELECT file_path<br>&nbsp;&nbsp;FROM flint_alb_logs_skipping_index<br>&nbsp;&nbsp;WHERE ARRAY_CONTAINS(elb_status_code, 404)<br>)<br>WHERE elb_status_code = 404                                                                       |
 | MinMax         | CREATE SKIPPING INDEX<br>ON alb_logs<br> (<br>&nbsp;&nbsp;request_processing_time MIN_MAX<br>)                                                                             | INSERT INTO flint_alb_logs_skipping_index<br>SELECT<br>&nbsp;&nbsp;MIN(request_processing_time) AS request_processing_time_min,<br>&nbsp;&nbsp;MAX(request_processing_time) AS request_processing_time_max,<br>&nbsp;&nbsp;input_file_name() AS file_path<br>FROM alb_logs<br>GROUP BY<br>&nbsp;&nbsp;input_file_name() | SELECT *<br>FROM alb_logs<br>WHERE request_processing_time = 100<br>=><br>SELECT *<br>FROM alb_logs (input_files = <br>  SELECT file_path<br>&nbsp;&nbsp;FROM flint_alb_logs_skipping_index<br>&nbsp;&nbsp;WHERE request_processing_time_min <= 100<br>&nbsp;&nbsp;&nbsp;&nbsp;AND 100 <= request_processing_time_max<br>)<br>WHERE request_processing_time = 100 |
-| BloomFilter    | CREATE SKIPPING INDEX<br>ON alb_logs<br> (<br>&nbsp;&nbsp;client_ip BLOOM_FILTER<br>)                                                                                | INSERT INTO flint_alb_logs_skipping_index<br>SELECT<br>&nbsp;&nbsp;BLOOM_FILTER_AGG(client_ip) AS client_ip,<br>&nbsp;&nbsp;input_file_name() AS file_path<br>FROM alb_logs<br>GROUP BY<br>&nbsp;&nbsp;input_file_name()                                                                                   | SELECT *<br>FROM alb_logs<br>WHERE client_ip = '127.0.0.1'<br>=><br>SELECT *<br>FROM alb_logs (input_files = <br>&nbsp;&nbsp;SELECT file_path<br>&nbsp;&nbsp;FROM flint_alb_logs_skipping_index<br>&nbsp;&nbsp;WHERE BLOOM_FILTER_MIGHT_CONTAIN(client_ip, '127.0.0.1') = true<br>)<br>WHERE client_ip = '127.0.0.1'                                        |
+| BloomFilter    | CREATE SKIPPING INDEX<br>ON alb_logs<br> (<br>&nbsp;&nbsp;client_ip BLOOM_FILTER<br>)                                                                                | INSERT INTO flint_alb_logs_skipping_index<br>SELECT<br>&nbsp;&nbsp;BLOOM_FILTER_AGG(client_ip) AS client_ip,<br>&nbsp;&nbsp;input_file_name() AS file_path<br>FROM alb_logs<br>GROUP BY<br>&nbsp;&nbsp;input_file_name()                                                                                   | SELECT *<br>FROM alb_logs<br>WHERE client_ip = '127.0.0.1'<br>=><br>SELECT *<br>FROM alb_logs (input_files = <br>&nbsp;&nbsp;SELECT file_path<br>&nbsp;&nbsp;FROM flint_alb_logs_skipping_index<br>&nbsp;&nbsp;WHERE BLOOM_FILTER_MIGHT_CONTAIN(client_ip, '127.0.0.1')<br>)<br>WHERE client_ip = '127.0.0.1'                                        |
 
 ### Flint Index Refresh
 
@@ -153,7 +153,20 @@ High level API is dependent on query engine implementation. Please see Query Eng
 
 #### Skipping Index
 
-The default maximum size for the value set is 100. In cases where a file contains columns with high cardinality values, the value set will become null. This is the trade-off that prevents excessive memory consumption at the cost of not skipping the file.
+Provided below are the explanations for the parameters of the skipping algorithm. You can find the default values in the function signature below:
+
+- **VALUE_SET(limit=100):** If the column values of a file has higher cardinality than the limit (optional, default is 100), the value set will become null. This trade-off prevents excessive memory consumption at the expense of not skipping the file.
+
+- **BLOOM_FILTER**
+  - **BLOOM_FILTER(num_candidate=10, fpp=0.03):** By default, the adaptive BloomFilter algorithm is used. Users can configure:
+    1. The number of candidates (optional), starting with an expected number of distinct items at 1024 and doubling.
+    2. The false positive probability of each candidate (optional).
+    3. Examples: `BLOOM_FILTER`, `BLOOM_FILTER(20), BLOOM_FILTER(20, 0.01)`
+
+  - **BLOOM_FILTER(false, num_items=10000, fpp=0.03):** Setting the first parameter to `false` will revert to the non-adaptive algorithm. Users can configure:
+    1. The expected number of distinct values (optional).
+    2. The false positive probability (optional).
+    3. Examples: `BLOOM_FILTER(false)`, `BLOOM_FILTER(false, 1000000)`, `BLOOM_FILTER(false, 1000000, 0.01)`
 
 ```sql
 CREATE SKIPPING INDEX [IF NOT EXISTS]
@@ -169,6 +182,8 @@ REFRESH SKIPPING INDEX ON <object>
 DROP SKIPPING INDEX ON <object>
 
 VACUUM SKIPPING INDEX ON <object>
+
+ANALYZE SKIPPING INDEX ON <object>
 
 <object> ::= [db_name].[schema_name].table_name
 ```
@@ -276,6 +291,59 @@ DESC MATERIALIZED VIEW alb_logs_metrics
 DROP MATERIALIZED VIEW alb_logs_metrics
 
 VACUUM MATERIALIZED VIEW alb_logs_metrics
+```
+
+#### All Indexes
+
+- **Show Flint Indexes**: Displays all the flint indexes with their info. It outputs the following columns:
+  - flint_index_name: the full OpenSearch index name 
+  - kind: type of the index (skipping / covering / mv)
+  - database: database name for the index
+  - table: table name for skipping and covering index
+  - index_name: user defined name for covering index and materialized view
+  - auto_refresh: auto refresh option of the index (true / false)
+  - status: status of the index
+
+```sql
+SHOW FLINT [INDEX|INDEXES] IN catalog[.database]
+```
+
+Example:
+```
+sql> SHOW FLINT INDEXES IN spark_catalog.default;
+fetched rows / total rows = 3/3
++-------------------------------------------------------------+----------+----------+-----------+-----------------+--------------+------------+
+| flint_index_name                                            | kind     | database | table     | index_name      | auto_refresh | status     |
+|-------------------------------------------------------------+----------+----------+-----------+-----------------+--------------+------------|
+| flint_spark_catalog_default_http_count_view                 | mv       | default  | NULL      | http_count_view | false        | active     |
+| flint_spark_catalog_default_http_logs_skipping_index        | skipping | default  | http_logs | NULL            | true         | refreshing |
+| flint_spark_catalog_default_http_logs_status_clientip_index | covering | default  | http_logs | status_clientip | false        | active     |
++-------------------------------------------------------------+----------+----------+-----------+-----------------+--------------+------------+
+```
+
+- **Analyze Skipping Index**: Provides recommendation for creating skipping index. It outputs the following columns:
+  - column_name: recommended column's name
+  - column_type: recommended column's type
+  - skipping_type: recommended skipping type for column
+  - reason: why this skipping type is recommended
+
+```sql
+ANALYZE SKIPPING INDEX ON [catalog.database.]table
+```
+
+Example:
+```
+sql> ANALYZE SKIPPING INDEX ON alb_logs;
+fetched rows / total rows = 5/5
++-------------------------+-------------+---------------+-------------------------------------------------------------------+
+| column_name             | column_type | skipping_type | reason                                                            |
+|-------------------------+-------------+---------------+-------------------------------------------------------------------+
+| year                    | integer     | PARTITION     | PARTITION data structure is recommended for partition columns     |
+| month                   | integer     | PARTITION     | PARTITION data structure is recommended for partition columns     |
+| day                     | integer     | PARTITION     | PARTITION data structure is recommended for partition columns     |
+| request_processing_time | integer     | MIN_MAX       | MIN_MAX data structure is recommended for IntegerType columns     |
+| client_ip               | string      | BLOOM_FILTER  | BLOOM_FILTER data structure is recommended for StringType columns |
++-------------------------+-------------+---------------+-------------------------------------------------------------------+
 ```
 
 #### Create Index Options
