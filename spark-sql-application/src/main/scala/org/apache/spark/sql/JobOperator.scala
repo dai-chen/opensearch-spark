@@ -14,6 +14,7 @@ import scala.util.{Failure, Success, Try}
 
 import org.opensearch.flint.core.metrics.MetricConstants
 import org.opensearch.flint.core.metrics.MetricsUtil.incrementCounter
+import org.opensearch.flint.spark.{FlintSpark, FlintSparkIndexMonitor}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.flint.config.FlintSparkConf
@@ -92,7 +93,7 @@ case class JobOperator(
         // Clean Spark shuffle data after each microBatch.
         spark.streams.addListener(new ShuffleCleaner(spark))
         // wait if any child thread to finish before the main thread terminates
-        spark.streams.awaitAnyTermination()
+        new FlintSpark(spark).flintIndexMonitor.awaitMonitor()
       }
     } catch {
       case e: Exception => logError("streaming job failed", e)

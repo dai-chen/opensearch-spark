@@ -83,6 +83,42 @@ class FlintSparkIndexMonitor(
   }
 
   /**
+   * Await the termination of a Spark streaming job for the given index name and update Flint
+   * index state accordingly.
+   *
+   * @param indexName
+   *   Optional index monitor name to await. If not provided, choose any active stream.
+   */
+  def awaitMonitor(indexName: Option[String] = None): Unit = {
+    logInfo(s"Awaiting index monitor for $indexName")
+
+    // Find streaming query for the given index name, otherwise use the first
+    val stream = indexName
+      .flatMap(name => spark.streams.active.find(_.name == name))
+      .orElse(spark.streams.active.headOption)
+
+    if (stream.isDefined) {
+      val name = stream.get.name // use streaming job name because indexName maybe None
+      logInfo(s"Awaiting streaming job $name until terminated")
+      try {
+        stream.get.awaitTermination()
+        logInfo(s"Streaming job $name terminated without exception")
+      } catch {
+        case e: Throwable =>
+          // Transit to failed state. TODO: determine state code on exception type
+          logError(s"Streaming job $name terminated with exception", e)
+          flintClient
+            .startTransaction(name, dataSourceName)
+            .initialLog(latest => latest.state == REFRESHING)
+            .finalLog(latest => latest.copy(state = FAILED, error = extractRootCause(e)))
+            .commit(_ => {})
+      }
+    } else {
+      logInfo(s"Index monitor for [$indexName] not found")
+    }
+  }
+
+  /**
    * Index monitor task that encapsulates the execution logic with number of consecutive error
    * tracked.
    *
@@ -106,12 +142,6 @@ class FlintSparkIndexMonitor(
             .commit(_ => {})
         } else {
           logError("Streaming job is not active. Cancelling monitor task")
-          flintClient
-            .startTransaction(indexName, dataSourceName)
-            .initialLog(_ => true)
-            .finalLog(latest => latest.copy(state = FAILED))
-            .commit(_ => {})
-
           stopMonitor(indexName)
           logInfo("Index monitor task is cancelled")
         }
@@ -143,6 +173,21 @@ class FlintSparkIndexMonitor(
     } else {
       logWarning("Refreshing job not found")
     }
+  }
+
+  private def extractRootCause(e: Throwable): String = {
+    var cause = e
+    while (cause.getCause != null && cause.getCause != cause) {
+      cause = cause.getCause
+    }
+
+    if (cause.getLocalizedMessage != null) {
+      return cause.getLocalizedMessage
+    }
+    if (cause.getMessage != null) {
+      return cause.getMessage
+    }
+    cause.toString
   }
 }
 

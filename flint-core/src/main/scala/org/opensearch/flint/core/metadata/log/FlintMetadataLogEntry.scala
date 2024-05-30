@@ -5,6 +5,7 @@
 
 package org.opensearch.flint.core.metadata.log
 
+import org.opensearch.flint.core.metadata.FlintJsonHelper.buildJson
 import org.opensearch.flint.core.metadata.log.FlintMetadataLogEntry.IndexState
 import org.opensearch.flint.core.metadata.log.FlintMetadataLogEntry.IndexState.IndexState
 import org.opensearch.index.seqno.SequenceNumbers.{UNASSIGNED_PRIMARY_TERM, UNASSIGNED_SEQ_NO}
@@ -53,6 +54,7 @@ case class FlintMetadataLogEntry(
 
   def toJson: String = {
     // Implicitly populate latest appId, jobId and timestamp whenever persist
+    /*
     s"""
        |{
        |  "version": "1.0",
@@ -67,6 +69,21 @@ case class FlintMetadataLogEntry(
        |  "error": "$error"
        |}
        |""".stripMargin
+     */
+
+    buildJson(builder => {
+      builder
+        .field("version", "1.0")
+        .field("latestId", id)
+        .field("type", "flintindexstate")
+        .field("state", state.toString)
+        .field("applicationId", sys.env.getOrElse("SERVERLESS_EMR_VIRTUAL_CLUSTER_ID", "unknown"))
+        .field("jobId", sys.env.getOrElse("SERVERLESS_EMR_JOB_ID", "unknown"))
+        .field("dataSourceName", dataSource)
+        .field("jobStartTime", createTime)
+        .field("lastUpdateTime", System.currentTimeMillis())
+        .field("error", error)
+    })
   }
 }
 
