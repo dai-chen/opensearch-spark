@@ -5,7 +5,10 @@
 
 package org.opensearch.flint.common.metadata.log
 
-import org.opensearch.flint.common.metadata.log.FlintMetadataLogEntry.IndexState
+import scala.collection.JavaConverters.mapAsJavaMapConverter
+
+import com.fasterxml.jackson.databind.ObjectMapper
+import org.opensearch.flint.common.metadata.log.FlintMetadataLogEntry.{IndexState, OBJECT_MAPPER}
 import org.opensearch.flint.common.metadata.log.FlintMetadataLogEntry.IndexState.IndexState
 
 /**
@@ -52,24 +55,26 @@ case class FlintMetadataLogEntry(
 
   def toJson: String = {
     // Implicitly populate latest appId, jobId and timestamp whenever persist
-    s"""
-       |{
-       |  "version": "1.0",
-       |  "latestId": "$id",
-       |  "type": "flintindexstate",
-       |  "state": "$state",
-       |  "applicationId": "${sys.env.getOrElse("SERVERLESS_EMR_VIRTUAL_CLUSTER_ID", "unknown")}",
-       |  "jobId": "${sys.env.getOrElse("SERVERLESS_EMR_JOB_ID", "unknown")}",
-       |  "dataSourceName": "$dataSource",
-       |  "jobStartTime": $createTime,
-       |  "lastUpdateTime": ${System.currentTimeMillis()},
-       |  "error": "$error"
-       |}
-       |""".stripMargin
+    val json = OBJECT_MAPPER.writeValueAsString(
+      Map(
+        "version" -> "1.0",
+        "latestId" -> id,
+        "type" -> "flintindexstate",
+        "state" -> state.toString,
+        "applicationId" -> sys.env.getOrElse("SERVERLESS_EMR_VIRTUAL_CLUSTER_ID", "unknown"),
+        "jobId" -> sys.env.getOrElse("SERVERLESS_EMR_JOB_ID", "unknown"),
+        "dataSourceName" -> dataSource,
+        "jobStartTime" -> createTime,
+        "lastUpdateTime" -> System.currentTimeMillis(),
+        "error" -> error).asJava)
+    json
   }
 }
 
 object FlintMetadataLogEntry {
+
+  // TODO: make private
+  val OBJECT_MAPPER = new ObjectMapper()
 
   /**
    * Flint index state enum.
