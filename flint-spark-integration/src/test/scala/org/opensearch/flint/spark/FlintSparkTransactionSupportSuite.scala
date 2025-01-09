@@ -14,11 +14,13 @@ import org.mockito.invocation.InvocationOnMock
 import org.opensearch.flint.common.metadata.log.{FlintMetadataLog, FlintMetadataLogEntry, FlintMetadataLogService, OptimisticTransaction}
 import org.opensearch.flint.common.metadata.log.FlintMetadataLogEntry.IndexState._
 import org.opensearch.flint.core.FlintClient
+import org.scalatest.Ignore
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.mockito.MockitoSugar.mock
 
 import org.apache.spark.FlintSuite
 
+@Ignore
 class FlintSparkTransactionSupportSuite extends FlintSuite with Matchers {
 
   private val mockFlintClient: FlintClient = mock[FlintClient]

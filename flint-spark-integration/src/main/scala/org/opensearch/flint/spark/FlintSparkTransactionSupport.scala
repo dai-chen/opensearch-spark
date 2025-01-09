@@ -9,6 +9,7 @@ import org.opensearch.flint.common.metadata.log.{FlintMetadataLogService, Optimi
 import org.opensearch.flint.common.metadata.log.FlintMetadataLogEntry.IndexState.{CREATING, EMPTY, VACUUMING}
 import org.opensearch.flint.common.metadata.log.OptimisticTransaction.NO_LOG_ENTRY
 import org.opensearch.flint.core.FlintClient
+import org.opensearch.flint.core.metadata.log.NoOpOptimisticTransaction
 
 import org.apache.spark.internal.Logging
 
@@ -53,7 +54,8 @@ trait FlintSparkTransactionSupport extends Logging {
       opBlock: OptimisticTransaction[T] => T): Option[T] = {
     logInfo(s"Starting index operation [$opName $indexName] with forceInit=$forceInit")
     try {
-      val isCorrupted = isIndexCorrupted(indexName)
+      // AOSS throws illegal_argument_exception for get operation on nonexistent document
+      val isCorrupted = false // isIndexCorrupted(indexName)
       if (isCorrupted) {
         cleanupCorruptedIndex(indexName)
       }
@@ -62,8 +64,8 @@ trait FlintSparkTransactionSupport extends Logging {
       if (forceInit || !isCorrupted) {
 
         // Create transaction (only have side effect if forceInit is true)
-        val tx: OptimisticTransaction[T] =
-          flintMetadataLogService.startTransaction(indexName, forceInit)
+        val tx: OptimisticTransaction[T] = new NoOpOptimisticTransaction[T]()
+        // flintMetadataLogService.startTransaction(indexName, forceInit)
         val result = opBlock(tx)
         logInfo(s"Index operation [$opName $indexName] complete")
         Some(result)
