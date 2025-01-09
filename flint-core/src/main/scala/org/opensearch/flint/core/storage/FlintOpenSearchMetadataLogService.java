@@ -28,7 +28,7 @@ public class FlintOpenSearchMetadataLogService implements FlintMetadataLogServic
 
   private static final Logger LOG = Logger.getLogger(FlintOpenSearchMetadataLogService.class.getName());
 
-  public final static String METADATA_LOG_INDEX_NAME_PREFIX = ".query_execution_request";
+  public final static String METADATA_LOG_INDEX_NAME_PREFIX = "query_execution_request";
 
   private final FlintOptions options;
   private final String dataSourceName;

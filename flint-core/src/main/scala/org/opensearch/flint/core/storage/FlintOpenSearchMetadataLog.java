@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Logger;
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -93,14 +94,14 @@ public class FlintOpenSearchMetadataLog implements FlintMetadataLog<FlintMetadat
     LOG.info("Fetching latest log entry with id " + latestId);
     try (IRestHighLevelClient client = createOpenSearchClient()) {
       GetResponse response =
-          client.get(new GetRequest(metadataLogIndexName, latestId), RequestOptions.DEFAULT);
+              client.get(new GetRequest(metadataLogIndexName, latestId), RequestOptions.DEFAULT);
 
       if (response.isExists()) {
         FlintMetadataLogEntry latest = constructLogEntry(
-            response.getId(),
-            response.getSeqNo(),
-            response.getPrimaryTerm(),
-            response.getSourceAsMap()
+                response.getId(),
+                response.getSeqNo(),
+                response.getPrimaryTerm(),
+                response.getSourceAsMap()
         );
 
         LOG.info("Found latest log entry " + latest);

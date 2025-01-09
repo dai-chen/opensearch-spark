@@ -60,7 +60,8 @@ class FlintSpark(val spark: SparkSession) extends FlintSparkTransactionSupport w
   private val flintMetadataCacheWriter = FlintMetadataCacheWriterBuilder.build(flintSparkConf)
 
   private val flintAsyncQueryScheduler: AsyncQueryScheduler = {
-    AsyncQuerySchedulerBuilder.build(spark, flintSparkConf.flintOptions())
+    // AsyncQuerySchedulerBuilder.build(spark, flintSparkConf.flintOptions())
+    null
   }
 
   override protected val flintMetadataLogService: FlintMetadataLogService = {
@@ -143,7 +144,7 @@ class FlintSpark(val spark: SparkSession) extends FlintSparkTransactionSupport w
             flintClient.createIndex(indexName, metadata)
             flintIndexMetadataService.updateIndexMetadata(indexName, metadata)
             flintMetadataCacheWriter.updateMetadataCache(indexName, metadata)
-            jobSchedulingService.handleJob(index, AsyncQuerySchedulerAction.SCHEDULE)
+            // jobSchedulingService.handleJob(index, AsyncQuerySchedulerAction.SCHEDULE)
           })
       }
     }
@@ -201,8 +202,8 @@ class FlintSpark(val spark: SparkSession) extends FlintSparkTransactionSupport w
     logInfo(s"Describing index name $indexName")
     if (flintClient.exists(indexName)) {
       val metadata = flintIndexMetadataService.getIndexMetadata(indexName)
-      val metadataWithEntry = attachLatestLogEntry(indexName, metadata)
-      FlintSparkIndexFactory.create(spark, metadataWithEntry)
+      // val metadataWithEntry = attachLatestLogEntry(indexName, metadata)
+      FlintSparkIndexFactory.create(spark, metadata)
     } else {
       Option.empty
     }
