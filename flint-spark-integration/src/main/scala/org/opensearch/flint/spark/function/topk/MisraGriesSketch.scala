@@ -11,7 +11,7 @@ import org.apache.datasketches.memory.Memory
 
 class MisraGriesSketch(k: Int) extends TopKSketch[String] {
 
-  private val sketch = new ItemsSketch[String](k)
+  private val sketch = new ItemsSketch[String](nextPowerOfTwo(k))
   private val serDe = new ArrayOfStringsSerDe()
 
   override def update(item: String): Unit = {
@@ -40,7 +40,7 @@ class MisraGriesSketch(k: Int) extends TopKSketch[String] {
   }
 
   override def deserialize(bytes: Array[Byte]): TopKSketch[String] = {
-    val newSketch = new ItemsSketch[String](k)
+    val newSketch = new ItemsSketch[String](nextPowerOfTwo(k))
     newSketch.merge(ItemsSketch.getInstance(Memory.wrap(bytes), serDe))
     new MisraGriesSketch(k).withSketch(newSketch)
   }
@@ -49,5 +49,10 @@ class MisraGriesSketch(k: Int) extends TopKSketch[String] {
     val newInstance = new MisraGriesSketch(k)
     newInstance.sketch.merge(newSketch)
     newInstance
+  }
+
+  private def nextPowerOfTwo(x: Int): Int = {
+    if (x <= 0) 1
+    else 1 << (32 - Integer.numberOfLeadingZeros(x - 1))
   }
 }
