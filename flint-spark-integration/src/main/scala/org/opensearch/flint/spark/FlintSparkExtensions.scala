@@ -5,7 +5,7 @@
 
 package org.opensearch.flint.spark
 
-import org.opensearch.flint.spark.function.TumbleFunction
+import org.opensearch.flint.spark.function.{ApproxTopKAgg, ApproxTopKFunction, TumbleFunction}
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
 
 import org.apache.spark.sql.SparkSessionExtensions
@@ -21,6 +21,7 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
     }
 
     extensions.injectFunction(TumbleFunction.description)
+    extensions.injectFunction(ApproxTopKFunction.description)
 
     extensions.injectOptimizerRule { spark =>
       new FlintSparkOptimizer(spark)
