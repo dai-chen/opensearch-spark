@@ -12,51 +12,43 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo}
 import org.apache.spark.sql.types.IntegerType
 
 /**
- * Approximate Top-K function that finds the most common values for a given expression.
+ * Registers a Top-K aggregate function with a custom sketch implementation.
  */
 object ApproxTopKFunction {
 
   /**
-   * Function name.
+   * Create a function description for Spark.
+   *
+   * @param functionName
+   *   The name of the function to register (e.g., "approx_top_count_accurate")
+   * @param createSketch
+   *   A factory method to create the desired Top-K sketch
+   * @return
+   *   A function description tuple (identifier, info, builder)
    */
-  val identifier: FunctionIdentifier = FunctionIdentifier("approx_top_count")
+  def apply(functionName: String, createSketch: Int => TopKSketch[String])
+      : (FunctionIdentifier, ExpressionInfo, FunctionBuilder) = {
+    val identifier = FunctionIdentifier(functionName)
 
-  /**
-   * Function signature: returns an array of structs containing the top K values and their counts.
-   */
-  val exprInfo: ExpressionInfo = new ExpressionInfo(
-    classOf[Column].getCanonicalName,
-    identifier.funcName,
-    "Finds the approximate Top-K values using a Count-Min Sketch.")
+    val exprInfo = new ExpressionInfo(
+      classOf[ApproxTopKAgg].getCanonicalName,
+      functionName,
+      s"Approximates the Top-K values using the $functionName algorithm.")
 
-  /**
-   * Function implementation builder.
-   */
-  val functionBuilder: Seq[Expression] => Expression = (children: Seq[Expression]) => {
-    // Validate argument count and types
-    require(
-      children.size >= 2 && children.size <= 3,
-      "approx_top_count requires 2 or 3 arguments: approx_top_count(<expr>, <k>, [counters])")
+    val functionBuilder: Seq[Expression] => Expression = (children: Seq[Expression]) => {
+      require(children.size == 2, s"$functionName requires exactly 2 arguments: (expr, k)")
+      val expr = children.head
+      val kExpr = children(1)
 
-    val expr = children.head
-    val kExpr = children(1)
-    val countersExpr = if (children.size == 3) Some(children(2)) else None
+      if (kExpr.dataType != IntegerType) {
+        throw new IllegalArgumentException(
+          s"The second argument to $functionName must be an integer.")
+      }
 
-    if (kExpr.dataType != IntegerType) {
-      throw new IllegalArgumentException("The second argument <k> must be an integer.")
+      val k = kExpr.eval().asInstanceOf[Int]
+      ApproxTopKAgg(expr, k, (k) => createSketch(k))
     }
 
-    // Extract K and optional counters
-    val k = kExpr.eval().asInstanceOf[Int]
-    val counters = countersExpr.map(_.eval().asInstanceOf[Int]).getOrElse(100000)
-
-    // Create and return the TopKCMSAgg expression
-    ApproxTopKAgg(expr, k)
-  }
-
-  /**
-   * Function description for registering in a Spark extension.
-   */
-  val description: (FunctionIdentifier, ExpressionInfo, FunctionBuilder) =
     (identifier, exprInfo, functionBuilder)
+  }
 }

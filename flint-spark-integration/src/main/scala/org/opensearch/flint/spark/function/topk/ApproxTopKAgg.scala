@@ -15,12 +15,13 @@ import org.apache.spark.unsafe.types.UTF8String
 case class ApproxTopKAgg(
     child: Expression,
     k: Int,
+    createSketch: Int => TopKSketch[String],
     override val mutableAggBufferOffset: Int = 0,
     override val inputAggBufferOffset: Int = 0)
     extends TypedImperativeAggregate[TopKSketch[String]] {
 
-  def this(child: Expression, k: Int) =
-    this(child, k, 0, 0)
+  def this(child: Expression, k: Int, createSketch: Int => TopKSketch[String]) =
+    this(child, k, createSketch, 0, 0)
 
   override def nullable: Boolean = false
 
@@ -30,7 +31,7 @@ case class ApproxTopKAgg(
   override def children: Seq[Expression] = Seq(child)
 
   override def createAggregationBuffer(): TopKSketch[String] = {
-    createSketch()
+    createSketch(k)
   }
 
   override def update(buffer: TopKSketch[String], inputRow: InternalRow): TopKSketch[String] = {
@@ -65,7 +66,7 @@ case class ApproxTopKAgg(
   }
 
   override def deserialize(bytes: Array[Byte]): TopKSketch[String] = {
-    createSketch().deserialize(bytes)
+    createSketch(k).deserialize(bytes)
   }
 
   override protected def withNewChildrenInternal(
@@ -77,9 +78,4 @@ case class ApproxTopKAgg(
 
   override def withNewInputAggBufferOffset(newOffset: Int): ImperativeAggregate =
     copy(inputAggBufferOffset = newOffset)
-
-  // TODO: generic type String should be type of child expression
-  private def createSketch(): TopKSketch[String] = {
-    new MisraGriesSketch(k)
-  }
 }

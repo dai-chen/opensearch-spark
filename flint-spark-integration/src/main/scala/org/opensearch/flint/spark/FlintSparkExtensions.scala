@@ -6,7 +6,7 @@
 package org.opensearch.flint.spark
 
 import org.opensearch.flint.spark.function.TumbleFunction
-import org.opensearch.flint.spark.function.topk.{ApproxTopKAgg, ApproxTopKFunction}
+import org.opensearch.flint.spark.function.topk.{AccurateTopKSketch, ApproxTopKAgg, ApproxTopKFunction, MisraGriesSketch}
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
 
 import org.apache.spark.sql.SparkSessionExtensions
@@ -22,7 +22,10 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
     }
 
     extensions.injectFunction(TumbleFunction.description)
-    extensions.injectFunction(ApproxTopKFunction.description)
+    extensions.injectFunction(
+      ApproxTopKFunction("approx_top_count_accurate", k => new AccurateTopKSketch(k)))
+    extensions.injectFunction(
+      ApproxTopKFunction("approx_top_count_misra_gries", k => new MisraGriesSketch(k)))
 
     extensions.injectOptimizerRule { spark =>
       new FlintSparkOptimizer(spark)
