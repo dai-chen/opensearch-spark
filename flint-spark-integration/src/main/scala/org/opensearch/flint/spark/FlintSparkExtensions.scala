@@ -5,7 +5,8 @@
 
 package org.opensearch.flint.spark
 
-import org.opensearch.flint.spark.function.{ApproxTopKAgg, ApproxTopKFunction, TumbleFunction}
+import org.opensearch.flint.spark.function.TumbleFunction
+import org.opensearch.flint.spark.function.topk.{ApproxTopKAgg, ApproxTopKFunction}
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
 
 import org.apache.spark.sql.SparkSessionExtensions

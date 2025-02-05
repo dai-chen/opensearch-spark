@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.flint.spark.function
+package org.opensearch.flint.spark.function.topk
 
 import org.apache.spark.sql.Column
 import org.apache.spark.sql.catalyst.FunctionIdentifier
