@@ -5,7 +5,7 @@
 
 package org.opensearch.flint.spark
 
-import org.opensearch.flint.spark.function.{ApproxTopKFunction, TumbleFunction}
+import org.opensearch.flint.spark.function.{ApproxTopKAggSum, ApproxTopKFunction, ApproxTopSumFunction, TumbleFunction}
 import org.opensearch.flint.spark.function.topksketch.{AccurateTopKSketch, CountMinSketch, MisraGriesSketch, SpaceSavingSketch}
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
 
@@ -30,6 +30,8 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
       ApproxTopKFunction("approx_top_count_cms", k => new CountMinSketch(k)))
     extensions.injectFunction(
       ApproxTopKFunction("approx_top_count_space_saving", k => new SpaceSavingSketch(k)))
+
+    extensions.injectFunction(ApproxTopSumFunction.description)
 
     extensions.injectOptimizerRule { spark =>
       new FlintSparkOptimizer(spark)
