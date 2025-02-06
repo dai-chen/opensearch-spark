@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.flint.spark.function.topk
+package org.opensearch.flint.spark.function.topksketch
 
 import scala.collection.mutable
 
