@@ -7,13 +7,14 @@ package org.opensearch.flint.spark.function.topksketch
 import java.nio.ByteBuffer
 
 import scala.collection.mutable
+
 import org.apache.spark.util.sketch.{CountMinSketch => SparkCountMinSketch}
 
 /**
  * Count-Min Sketch adapter that implements TopKSketch using Spark's CMS.
  */
 class CountMinSketch(k: Int, width: Int = 1024, depth: Int = 5, seed: Int = 42)
-  extends TopKSketch[String] {
+    extends TopKSketch[String] {
 
   // Internal CMS
   private val cms = SparkCountMinSketch.create(width, depth, seed)

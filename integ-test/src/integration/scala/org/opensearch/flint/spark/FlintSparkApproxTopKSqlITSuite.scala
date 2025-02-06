@@ -19,7 +19,7 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
     sql(s"DROP TABLE $testTable")
   }
 
-  Seq("accurate", "misra_gries", "cms").foreach { (algorithm) =>
+  Seq("accurate", "misra_gries", "cms", "space_saving").foreach { (algorithm) =>
     test(s"approx top count by $algorithm algorithm") {
       val approx_top_count = s"approx_top_count_$algorithm"
       sql(s"""
