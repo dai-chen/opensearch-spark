@@ -55,8 +55,8 @@ class SpaceSavingSumSketch(k: Int) /* extends TopKSketch[(String, Double)] */ {
 
   // TODO: not necessary Long
   def getTopK: Seq[(String, Double)] = {
-    // Return the Top K elements sorted by summed weight descending
-    elementSums.toSeq.sortBy(-_._2)
+    // Return only the Top K elements sorted by summed weight descending
+    elementSums.toSeq.sortBy(-_._2).take(k)
   }
 
   def serialize(): Array[Byte] = {
@@ -68,11 +68,11 @@ class SpaceSavingSumSketch(k: Int) /* extends TopKSketch[(String, Double)] */ {
   def deserialize(bytes: Array[Byte]): SpaceSavingSumSketch = {
     val sumsString = new String(bytes, "UTF-8")
 
-    // Create a new SpaceSavingSumSketch and restore state
+    // Create a new sketch and restore state
     val sketch = new SpaceSavingSumSketch(k)
     sumsString.split(",").foreach { entry =>
-      val Array(item, sum) = entry.split(":")
-      sketch.elementSums.update(item, sum.toDouble)
+      val Array(item, sumStr) = entry.split(":")
+      sketch.elementSums.update(item, sumStr.toDouble)
     }
 
     sketch
