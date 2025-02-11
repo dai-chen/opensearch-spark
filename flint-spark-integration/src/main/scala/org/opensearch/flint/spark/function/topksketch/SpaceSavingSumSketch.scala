@@ -14,6 +14,7 @@ import scala.collection.mutable
  * summed weights.
  */
 class SpaceSavingSumSketch(k: Int) /* extends TopKSketch[(String, Double)] */ {
+  private val tracked = 1000
 
   // Map to store elements and their summed weights
   private val elementSums = mutable.Map.empty[String, Double]
@@ -28,7 +29,7 @@ class SpaceSavingSumSketch(k: Int) /* extends TopKSketch[(String, Double)] */ {
     if (elementSums.contains(key)) {
       // Increment the weight if the item is already tracked
       elementSums.update(key, elementSums(key) + weight)
-    } else if (elementSums.size < k) {
+    } else if (elementSums.size < tracked) {
       // Add new item if there's space
       elementSums.update(key, weight)
     } else {
@@ -45,7 +46,7 @@ class SpaceSavingSumSketch(k: Int) /* extends TopKSketch[(String, Double)] */ {
   def merge(other: SpaceSavingSumSketch): Unit = {
     other match {
       case ssAdapter: SpaceSavingSumSketch =>
-        ssAdapter.getTopK.foreach { case (item, sumWeight) =>
+        ssAdapter.elementSums.foreach { case (item, sumWeight) =>
           elementSums.update(item, elementSums.getOrElse(item, 0.0) + sumWeight)
         }
 
