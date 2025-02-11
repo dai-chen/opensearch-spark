@@ -22,7 +22,7 @@ class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
     if (elementCounts.contains(item)) {
       // Increment the count if the item is already tracked
       elementCounts.update(item, elementCounts(item) + 1)
-    } else if (elementCounts.size < k) {
+    } else if (elementCounts.size < tracked) {
       // Add new item if there's space
       elementCounts.update(item, 1L)
     } else {
@@ -36,7 +36,7 @@ class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
   override def merge(other: TopKSketch[String]): Unit = {
     other match {
       case ssAdapter: SpaceSavingSketch =>
-        ssAdapter.getTopK.foreach { case (item, count) =>
+        ssAdapter.elementCounts.foreach { case (item, count) =>
           elementCounts.update(item, elementCounts.getOrElse(item, 0L) + count)
         }
 
@@ -46,7 +46,7 @@ class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
 
   override def getTopK: Seq[(String, Long)] = {
     // Return the Top K elements sorted by count descending
-    elementCounts.toSeq.sortBy(-_._2)
+    elementCounts.toSeq.sortBy(-_._2).take(k)
   }
 
   override def serialize(): Array[Byte] = {

@@ -11,7 +11,7 @@ import org.apache.datasketches.memory.Memory
 
 class MisraGriesSketch(k: Int) extends TopKSketch[String] {
 
-  private val sketch = new ItemsSketch[String](nextPowerOfTwo(k))
+  private val sketch = new ItemsSketch[String](nextPowerOfTwo(tracked))
   private val serDe = new ArrayOfStringsSerDe()
 
   override def update(item: String): Unit = {
@@ -28,7 +28,7 @@ class MisraGriesSketch(k: Int) extends TopKSketch[String] {
 
   override def getTopK: Seq[(String, Long)] = {
     sketch
-      .getFrequentItems(ErrorType.NO_FALSE_NEGATIVES)
+      .getFrequentItems(ErrorType.NO_FALSE_POSITIVES)
       .map(item => (item.getItem, item.getEstimate))
       .toSeq
       .sortBy(-_._2) // Sort by frequency descending
@@ -40,9 +40,15 @@ class MisraGriesSketch(k: Int) extends TopKSketch[String] {
   }
 
   override def deserialize(bytes: Array[Byte]): TopKSketch[String] = {
+    /*
     val newSketch = new ItemsSketch[String](nextPowerOfTwo(k))
     newSketch.merge(ItemsSketch.getInstance(Memory.wrap(bytes), serDe))
+
     new MisraGriesSketch(k).withSketch(newSketch)
+     */
+    val newSketch = new MisraGriesSketch(k)
+    newSketch.sketch.merge(ItemsSketch.getInstance(Memory.wrap(bytes), serDe))
+    newSketch
   }
 
   private def withSketch(newSketch: ItemsSketch[String]): MisraGriesSketch = {

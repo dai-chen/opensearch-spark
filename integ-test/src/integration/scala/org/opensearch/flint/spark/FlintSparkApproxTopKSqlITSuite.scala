@@ -55,8 +55,7 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
     test(s"approx top count by $algorithm algorithm with auto-refresh MV") {
       withTempDir { checkpointDir =>
         val approx_top_count = s"approx_top_count_$algorithm"
-        sql(
-          s"""
+        sql(s"""
              | CREATE MATERIALIZED VIEW $mvName
              | AS
              | SELECT

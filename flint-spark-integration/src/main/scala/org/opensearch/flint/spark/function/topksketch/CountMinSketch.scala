@@ -13,7 +13,7 @@ import org.apache.spark.util.sketch.{CountMinSketch => SparkCountMinSketch}
 /**
  * Count-Min Sketch adapter that implements TopKSketch using Spark's CMS.
  */
-class CountMinSketch(k: Int, width: Int = 1024, depth: Int = 5, seed: Int = 42)
+class CountMinSketch(k: Int, width: Int = 8192, depth: Int = 10, seed: Int = 42)
     extends TopKSketch[String] {
 
   // Internal CMS
@@ -27,7 +27,22 @@ class CountMinSketch(k: Int, width: Int = 1024, depth: Int = 5, seed: Int = 42)
     // Update CMS
     cms.add(item, 1)
     val estimatedCount = cms.estimateCount(item)
+    doUpdate(item, estimatedCount)
+  }
 
+  override def merge(other: TopKSketch[String]): Unit = {
+    other match {
+      case cmsAdapter: CountMinSketch =>
+        cms.mergeInPlace(cmsAdapter.cms)
+        cmsAdapter.topKHeap.foreach { case (item, _) =>
+          val estimatedCount = cms.estimateCount(item)
+          doUpdate(item, estimatedCount)
+        }
+      case _ => throw new IllegalArgumentException("Cannot merge with incompatible sketch")
+    }
+  }
+
+  private def doUpdate(item: String, estimatedCount: Long): Unit = {
     // If item is already in the heap, update its count
     if (topKHeap.exists(_._1 == item)) {
       // Efficiently update or replace item in the heap
@@ -44,21 +59,6 @@ class CountMinSketch(k: Int, width: Int = 1024, depth: Int = 5, seed: Int = 42)
       // If the heap has space or the item is more frequent than the smallest, add it
       if (topKHeap.size >= k) topKHeap.dequeue()
       topKHeap.enqueue((item, estimatedCount))
-    }
-  }
-
-  override def merge(other: TopKSketch[String]): Unit = {
-    other match {
-      case cmsAdapter: CountMinSketch =>
-        // Merge CMS
-        cms.mergeInPlace(cmsAdapter.cms)
-
-        // Merge Top K items from the other sketch
-        cmsAdapter.getTopK.foreach { case (item, count) =>
-          update(item)
-        }
-
-      case _ => throw new IllegalArgumentException("Cannot merge with incompatible sketch")
     }
   }
 

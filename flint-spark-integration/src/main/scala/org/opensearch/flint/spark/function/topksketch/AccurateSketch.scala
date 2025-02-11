@@ -13,8 +13,8 @@ class AccurateTopKSketch[T](k: Int) extends TopKSketch[T] {
   private val itemCounts = mutable.HashMap.empty[T, Long]
 
   // Min-heap to maintain the Top K items
-  private implicit val ordering: Ordering[(T, Long)] = Ordering.by(_._2)
-  private val topKHeap = mutable.PriorityQueue.empty[(T, Long)]
+  // private implicit val ordering: Ordering[(T, Long)] = Ordering.by(_._2) // Min-Heap based on count
+  // private val topKHeap = mutable.PriorityQueue.empty[(T, Long)]
 
   override def update(item: T): Unit = {
     // Increment the count for the item
@@ -34,14 +34,21 @@ class AccurateTopKSketch[T](k: Int) extends TopKSketch[T] {
 
   override def getTopK: Seq[(T, Long)] = {
     // Rebuild the heap with the latest counts
-    topKHeap.clear()
-    itemCounts.foreach { case (item, count) =>
-      topKHeap.enqueue((item, count))
-      if (topKHeap.size > k) topKHeap.dequeue() // Maintain only the top K items
+    val minHeap = mutable.PriorityQueue.empty[(T, Long)](Ordering.by(-_._2)) // Min-heap on count
+
+    for ((item, count) <- itemCounts) {
+      if (minHeap.size < k) {
+        // If heap is not full, just enqueue
+        minHeap.enqueue((item, count))
+      } else if (count > minHeap.head._2) {
+        // If count is greater than the smallest in heap, replace it
+        minHeap.dequeue() // Remove smallest
+        minHeap.enqueue((item, count))
+      }
     }
 
-    // Return the Top K items sorted by count in descending order
-    topKHeap.toSeq.sortBy(-_._2)
+    // Convert heap to descending order (top-K highest first)
+    minHeap.toSeq.sortBy(-_._2)
   }
 
   override def serialize(): Array[Byte] = {

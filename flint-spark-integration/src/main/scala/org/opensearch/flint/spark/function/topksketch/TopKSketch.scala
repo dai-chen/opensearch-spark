@@ -7,6 +7,9 @@ package org.opensearch.flint.spark.function.topksketch
 
 trait TopKSketch[T] {
 
+  /** The number of elements tracked in memory by each sketch implementation */
+  val tracked = 1000
+
   /** Updates the sketch with a new item */
   def update(item: T): Unit
 
