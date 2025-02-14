@@ -6,6 +6,7 @@
 package org.opensearch.flint.spark.function.topksketch
 
 import java.nio.ByteBuffer
+import java.util.Base64
 
 import scala.collection.mutable
 
@@ -22,7 +23,7 @@ class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
     if (elementCounts.contains(item)) {
       // Increment the count if the item is already tracked
       elementCounts.update(item, elementCounts(item) + 1)
-    } else if (elementCounts.size < tracked) {
+    } else if (elementCounts.size < k) {
       // Add new item if there's space
       elementCounts.update(item, 1L)
     } else {
@@ -50,21 +51,35 @@ class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
   }
 
   override def serialize(): Array[Byte] = {
-    // Serialize the elementCounts map to a string
-    val countsString = elementCounts.map { case (item, count) => s"$item:$count" }.mkString(",")
+    // Serialize the elementCounts map to a string with Base64 encoding
+    val countsString = elementCounts
+      .map { case (item, count) =>
+        val encodedKey = Base64.getEncoder.encodeToString(item.getBytes("UTF-8"))
+        s"$encodedKey:$count"
+      }
+      .mkString("\n")
+
     countsString.getBytes("UTF-8")
   }
 
   override def deserialize(bytes: Array[Byte]): TopKSketch[String] = {
     val countsString = new String(bytes, "UTF-8")
 
-    // Create a new SpaceSavingSketch and restore state
+    // Create a new SpaceSavingSketch and restore state with defensive parsing
     val sketch = new SpaceSavingSketch(k)
-    countsString.split(",").foreach { entry =>
-      val Array(item, count) = entry.split(":")
-      sketch.elementCounts.update(item, count.toLong)
+    countsString.split("\n").foreach { entry =>
+      val parts = entry.split(":")
+      if (parts.length == 2) {
+        try {
+          val decodedKey = new String(Base64.getDecoder.decode(parts(0)), "UTF-8")
+          val countValue = parts(1).toLong
+          sketch.elementCounts.update(decodedKey, countValue)
+        } catch {
+          case _: IllegalArgumentException => // Ignore corrupted lines
+          case _: NumberFormatException => // Ignore invalid counts
+        }
+      }
     }
-
     sketch
   }
 }

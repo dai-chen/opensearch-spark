@@ -6,6 +6,7 @@
 package org.opensearch.flint.spark.function.topksketch
 
 import java.nio.ByteBuffer
+import java.util.Base64
 
 import scala.collection.mutable
 
@@ -13,7 +14,7 @@ import scala.collection.mutable
  * Space-Saving Sketch for APPROX_TOP_SUM. Tracks the Top K elements with the highest approximate
  * summed weights.
  */
-class SpaceSavingSumSketch(k: Int) /* extends TopKSketch[(String, Double)] */ {
+class SpaceSavingSumSketch(k: Int) {
   private val tracked = 1000
 
   // Map to store elements and their summed weights
@@ -54,26 +55,40 @@ class SpaceSavingSumSketch(k: Int) /* extends TopKSketch[(String, Double)] */ {
     }
   }
 
-  // TODO: not necessary Long
   def getTopK: Seq[(String, Double)] = {
     // Return only the Top K elements sorted by summed weight descending
     elementSums.toSeq.sortBy(-_._2).take(k)
   }
 
   def serialize(): Array[Byte] = {
-    // Serialize the elementSums map to a string
-    val sumsString = elementSums.map { case (item, sum) => s"$item:$sum" }.mkString(",")
+    // Serialize the elementSums map to a string in a safer way
+    val sumsString = elementSums
+      .map { case (item, sum) =>
+        val encodedKey = Base64.getEncoder.encodeToString(item.getBytes("UTF-8"))
+        s"$encodedKey:$sum"
+      }
+      .mkString("\n")
+
     sumsString.getBytes("UTF-8")
   }
 
   def deserialize(bytes: Array[Byte]): SpaceSavingSumSketch = {
     val sumsString = new String(bytes, "UTF-8")
 
-    // Create a new sketch and restore state
+    // Create a new sketch and restore state with defensive parsing
     val sketch = new SpaceSavingSumSketch(k)
-    sumsString.split(",").foreach { entry =>
-      val Array(item, sumStr) = entry.split(":")
-      sketch.elementSums.update(item, sumStr.toDouble)
+
+    sumsString.split("\n").foreach { entry =>
+      val parts = entry.split(":")
+      if (parts.length == 2) {
+        try {
+          val decodedKey = new String(Base64.getDecoder.decode(parts(0)), "UTF-8")
+          val sumValue = parts(1).toDouble
+          sketch.elementSums.update(decodedKey, sumValue)
+        } catch {
+          case _: IllegalArgumentException => // Ignore corrupted lines
+        }
+      }
     }
 
     sketch
