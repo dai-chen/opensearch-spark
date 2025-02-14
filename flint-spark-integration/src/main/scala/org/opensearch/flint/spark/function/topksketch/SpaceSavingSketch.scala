@@ -51,10 +51,11 @@ class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
   }
 
   override def serialize(): Array[Byte] = {
-    // Serialize the elementCounts map to a string with Base64 encoding
+    // Serialize the elementCounts map as JSON-like strings
     val countsString = elementCounts
       .map { case (item, count) =>
-        val encodedKey = Base64.getEncoder.encodeToString(item.getBytes("UTF-8"))
+        val cleanedItem = item.replace("[", "").replace("]", "")
+        val encodedKey = Base64.getEncoder.encodeToString(cleanedItem.getBytes("UTF-8"))
         s"$encodedKey:$count"
       }
       .mkString("\n")
@@ -72,8 +73,9 @@ class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
       if (parts.length == 2) {
         try {
           val decodedKey = new String(Base64.getDecoder.decode(parts(0)), "UTF-8")
+          val cleanedKey = decodedKey.replace("[", "").replace("]", "")
           val countValue = parts(1).toLong
-          sketch.elementCounts.update(decodedKey, countValue)
+          sketch.elementCounts.update(cleanedKey, countValue)
         } catch {
           case _: IllegalArgumentException => // Ignore corrupted lines
           case _: NumberFormatException => // Ignore invalid counts
