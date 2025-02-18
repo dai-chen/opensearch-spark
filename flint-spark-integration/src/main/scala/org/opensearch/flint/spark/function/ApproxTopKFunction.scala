@@ -27,7 +27,7 @@ object ApproxTopKFunction {
    * @return
    *   A function description tuple (identifier, info, builder)
    */
-  def apply(functionName: String, createSketch: Int => TopKSketch[String])
+  def apply(functionName: String, createSketch: (Int, Int) => TopKSketch[String])
       : (FunctionIdentifier, ExpressionInfo, FunctionBuilder) = {
     val identifier = FunctionIdentifier(functionName)
 
@@ -37,17 +37,19 @@ object ApproxTopKFunction {
       s"Approximates the Top-K values using the $functionName algorithm.")
 
     val functionBuilder: Seq[Expression] => Expression = (children: Seq[Expression]) => {
-      require(children.size == 2, s"$functionName requires exactly 2 arguments: (expr, k)")
+      require(children.size == 3, s"$functionName requires exactly 3 arguments: (expr, k)")
       val expr = children.head
       val kExpr = children(1)
+      val trackedExpr = children(2)
 
-      if (kExpr.dataType != IntegerType) {
+      if (kExpr.dataType != IntegerType || trackedExpr.dataType != IntegerType) {
         throw new IllegalArgumentException(
-          s"The second argument to $functionName must be an integer.")
+          s"The second and third argument to $functionName must be an integer.")
       }
 
       val k = kExpr.eval().asInstanceOf[Int]
-      ApproxTopKAgg(expr, k, (k) => createSketch(k))
+      val tracked = trackedExpr.eval().asInstanceOf[Int]
+      ApproxTopKAgg(expr, k, tracked, (k, tracked) => createSketch(k, tracked))
     }
 
     (identifier, exprInfo, functionBuilder)

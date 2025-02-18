@@ -14,8 +14,8 @@ import scala.collection.mutable
  * Space-Saving Sketch for APPROX_TOP_SUM. Tracks the Top K elements with the highest approximate
  * summed weights.
  */
-class SpaceSavingSumSketch(k: Int) {
-  private val tracked = 1000
+class SpaceSavingSumSketch(k: Int, tracked: Int) {
+  // private val tracked = 1000
   private val elementSums =
     mutable.Map.empty[String, Long] // <--- Changed Double to Long only here
 
@@ -54,7 +54,7 @@ class SpaceSavingSumSketch(k: Int) {
 
   def deserialize(bytes: Array[Byte]): SpaceSavingSumSketch = {
     val sumsString = new String(bytes, "UTF-8")
-    val sketch = new SpaceSavingSumSketch(k)
+    val sketch = new SpaceSavingSumSketch(k, tracked)
     sumsString.split("\n").foreach { entry =>
       val parts = entry.split(":")
       if (parts.length == 2) {

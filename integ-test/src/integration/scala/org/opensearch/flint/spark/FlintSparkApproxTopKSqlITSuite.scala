@@ -33,8 +33,8 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
       sql(s"""
            | SELECT
            |   window.start,
-           |   $approx_top_count(productId, 5),
-           |   $approx_top_count(customerId, 2)
+           |   $approx_top_count(productId, 5, 10),
+           |   $approx_top_count(customerId, 2, 10)
            | FROM $testTable
            | GROUP BY TUMBLE(transactionDate, '1 week')
            |""".stripMargin).show(false)
@@ -45,8 +45,8 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
     sql(s"""
            | SELECT
            |   window.start,
-           |   approx_top_sum(productId, productsAmount, 5),
-           |   approx_top_sum(struct(productId, customerId), productsAmount, 5)
+           |   approx_top_sum(productId, productsAmount, 5, 10),
+           |   approx_top_sum(struct(productId, customerId), productsAmount, 5, 10)
            | FROM $testTable
            | GROUP BY TUMBLE(transactionDate, '1 week')
            |""".stripMargin).show(false)
@@ -61,8 +61,8 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
              | AS
              | SELECT
              |   window.start,
-             |   $approx_top_count(productId, 5),
-             |   $approx_top_count(customerId, 2)
+             |   $approx_top_count(productId, 5, 10),
+             |   $approx_top_count(customerId, 2, 10)
              | FROM $testTable
              | GROUP BY TUMBLE(transactionDate, '1 week')
              | WITH (

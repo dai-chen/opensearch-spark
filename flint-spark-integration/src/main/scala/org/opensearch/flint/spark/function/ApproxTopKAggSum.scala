@@ -20,6 +20,7 @@ case class ApproxTopKAggSum(
     keyExpr: Expression,
     weightExpr: Expression,
     k: Int,
+    tracked: Int,
     override val mutableAggBufferOffset: Int = 0,
     override val inputAggBufferOffset: Int = 0)
     extends TypedImperativeAggregate[SpaceSavingSumSketch] {
@@ -38,7 +39,8 @@ case class ApproxTopKAggSum(
 
   override def children: Seq[Expression] = Seq(keyExpr, weightExpr)
 
-  override def createAggregationBuffer(): SpaceSavingSumSketch = new SpaceSavingSumSketch(k)
+  override def createAggregationBuffer(): SpaceSavingSumSketch =
+    new SpaceSavingSumSketch(k, tracked)
 
   override def update(
       buffer: SpaceSavingSumSketch,
@@ -89,7 +91,7 @@ case class ApproxTopKAggSum(
 
   override def serialize(buffer: SpaceSavingSumSketch): Array[Byte] = buffer.serialize()
   override def deserialize(bytes: Array[Byte]): SpaceSavingSumSketch =
-    new SpaceSavingSumSketch(k).deserialize(bytes)
+    new SpaceSavingSumSketch(k, tracked).deserialize(bytes)
 
   override protected def withNewChildrenInternal(
       newChildren: IndexedSeq[Expression]): TypedImperativeAggregate[SpaceSavingSumSketch] =

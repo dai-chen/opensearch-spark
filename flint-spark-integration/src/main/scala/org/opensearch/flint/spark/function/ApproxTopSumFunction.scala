@@ -18,11 +18,12 @@ object ApproxTopSumFunction {
       "approx_top_sum"),
     (expressions: Seq[Expression]) => {
       require(
-        expressions.length == 3,
-        "approx_top_sum requires three arguments: key, weight, and number")
+        expressions.length == 4,
+        "approx_top_sum requires four arguments: key, weight, number and tracked")
       val keyExpr = expressions.head
       val weightExpr = expressions(1)
       val k = expressions(2).eval().asInstanceOf[Int]
-      ApproxTopKAggSum(keyExpr, weightExpr, k)
+      val tracked = expressions(3).eval().asInstanceOf[Int]
+      ApproxTopKAggSum(keyExpr, weightExpr, k, tracked)
     })
 }

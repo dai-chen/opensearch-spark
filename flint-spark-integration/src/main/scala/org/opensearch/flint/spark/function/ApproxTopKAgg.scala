@@ -17,13 +17,18 @@ import org.apache.spark.unsafe.types.UTF8String
 case class ApproxTopKAgg(
     child: Expression,
     k: Int,
-    createSketch: Int => TopKSketch[String],
+    tracked: Int,
+    createSketch: (Int, Int) => TopKSketch[String],
     override val mutableAggBufferOffset: Int = 0,
     override val inputAggBufferOffset: Int = 0)
     extends TypedImperativeAggregate[TopKSketch[String]] {
 
-  def this(child: Expression, k: Int, createSketch: Int => TopKSketch[String]) =
-    this(child, k, createSketch, 0, 0)
+  def this(
+      child: Expression,
+      k: Int,
+      tracked: Int,
+      createSketch: (Int, Int) => TopKSketch[String]) =
+    this(child, k, tracked, createSketch, 0, 0)
 
   override def nullable: Boolean = false
 
@@ -34,7 +39,7 @@ case class ApproxTopKAgg(
   override def children: Seq[Expression] = Seq(child)
 
   override def createAggregationBuffer(): TopKSketch[String] = {
-    createSketch(k)
+    createSketch(k, tracked)
   }
 
   override def update(buffer: TopKSketch[String], inputRow: InternalRow): TopKSketch[String] = {
@@ -91,7 +96,7 @@ case class ApproxTopKAgg(
   }
 
   override def deserialize(bytes: Array[Byte]): TopKSketch[String] = {
-    createSketch(k).deserialize(bytes)
+    createSketch(k, tracked).deserialize(bytes)
   }
 
   override protected def withNewChildrenInternal(

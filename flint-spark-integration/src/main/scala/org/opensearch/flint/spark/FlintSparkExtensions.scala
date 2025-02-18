@@ -23,13 +23,17 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
 
     extensions.injectFunction(TumbleFunction.description)
     extensions.injectFunction(
-      ApproxTopKFunction("approx_top_count_accurate", k => new AccurateTopKSketch(k)))
+      ApproxTopKFunction("approx_top_count_accurate", (k, tracked) => new AccurateTopKSketch(k)))
     extensions.injectFunction(
-      ApproxTopKFunction("approx_top_count_misra_gries", k => new MisraGriesSketch(k)))
+      ApproxTopKFunction(
+        "approx_top_count_misra_gries",
+        (k, tracked) => new MisraGriesSketch(k, tracked)))
     extensions.injectFunction(
-      ApproxTopKFunction("approx_top_count_cms", k => new CountMinSketch(k)))
+      ApproxTopKFunction("approx_top_count_cms", (k, tracked) => new CountMinSketch(k)))
     extensions.injectFunction(
-      ApproxTopKFunction("approx_top_count_space_saving", k => new SpaceSavingSketch(k)))
+      ApproxTopKFunction(
+        "approx_top_count_space_saving",
+        (k, tracked) => new SpaceSavingSketch(k, tracked)))
 
     extensions.injectFunction(ApproxTopSumFunction.description)
 

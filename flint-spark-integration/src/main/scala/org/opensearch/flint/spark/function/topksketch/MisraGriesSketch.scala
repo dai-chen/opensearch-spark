@@ -9,7 +9,7 @@ import org.apache.datasketches.ArrayOfStringsSerDe
 import org.apache.datasketches.frequencies.{ErrorType, ItemsSketch}
 import org.apache.datasketches.memory.Memory
 
-class MisraGriesSketch(k: Int) extends TopKSketch[String] {
+class MisraGriesSketch(k: Int, tracked: Int) extends TopKSketch[String] {
 
   private val sketch = new ItemsSketch[String](nextPowerOfTwo(tracked))
   private val serDe = new ArrayOfStringsSerDe()
@@ -40,7 +40,7 @@ class MisraGriesSketch(k: Int) extends TopKSketch[String] {
   }
 
   override def deserialize(bytes: Array[Byte]): TopKSketch[String] = {
-    val newSketch = new MisraGriesSketch(k)
+    val newSketch = new MisraGriesSketch(k, tracked)
     newSketch.sketch.merge(ItemsSketch.getInstance(Memory.wrap(bytes), serDe))
     newSketch
   }

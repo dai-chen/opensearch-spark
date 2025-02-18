@@ -14,7 +14,7 @@ import scala.collection.mutable
  * Space-Saving Sketch that implements TopKSketch. Tracks the Top K elements with the highest
  * estimated counts.
  */
-class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
+class SpaceSavingSketch(k: Int, tracked: Int) extends TopKSketch[String] {
 
   // Map to store elements and their counts
   private val elementCounts = mutable.Map.empty[String, Long]
@@ -23,7 +23,7 @@ class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
     if (elementCounts.contains(item)) {
       // Increment the count if the item is already tracked
       elementCounts.update(item, elementCounts(item) + 1)
-    } else if (elementCounts.size < k) {
+    } else if (elementCounts.size < tracked) {
       // Add new item if there's space
       elementCounts.update(item, 1L)
     } else {
@@ -67,7 +67,7 @@ class SpaceSavingSketch(k: Int) extends TopKSketch[String] {
     val countsString = new String(bytes, "UTF-8")
 
     // Create a new SpaceSavingSketch and restore state with defensive parsing
-    val sketch = new SpaceSavingSketch(k)
+    val sketch = new SpaceSavingSketch(k, tracked)
     countsString.split("\n").foreach { entry =>
       val parts = entry.split(":")
       if (parts.length == 2) {
