@@ -45,7 +45,8 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
     sql(s"""
            | SELECT
            |   window.start,
-           |   approx_top_sum(productId, productsAmount, 5)
+           |   approx_top_sum(productId, productsAmount, 5),
+           |   approx_top_sum(struct(productId, customerId), productsAmount, 5)
            | FROM $testTable
            | GROUP BY TUMBLE(transactionDate, '1 week')
            |""".stripMargin).show(false)

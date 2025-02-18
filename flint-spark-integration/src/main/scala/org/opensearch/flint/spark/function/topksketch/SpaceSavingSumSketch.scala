@@ -16,81 +16,57 @@ import scala.collection.mutable
  */
 class SpaceSavingSumSketch(k: Int) {
   private val tracked = 1000
+  private val elementSums =
+    mutable.Map.empty[String, Long] // <--- Changed Double to Long only here
 
-  // Map to store elements and their summed weights
-  private val elementSums = mutable.Map.empty[String, Double]
-
-  def update(item: (String, Double)): Unit = {
+  def update(item: (String, Long)): Unit = {
     val (key, weight) = item
-
-    if (weight.isNaN || weight < 0) {
-      throw new IllegalArgumentException("Weight must be non-negative and not NaN")
-    }
-
+    if (weight < 0) throw new IllegalArgumentException("Weight must be non-negative")
     if (elementSums.contains(key)) {
-      // Increment the weight if the item is already tracked
       elementSums.update(key, elementSums(key) + weight)
     } else if (elementSums.size < tracked) {
-      // Add new item if there's space
       elementSums.update(key, weight)
     } else {
-      // Replace the item with the smallest weight if full
       val (minItem, minWeight) = elementSums.minBy(_._2)
       elementSums.remove(minItem)
-      elementSums.update(
-        key,
-        weight + minWeight
-      ) // Increment by smallest weight during replacement
+      elementSums.update(key, weight + minWeight)
     }
   }
 
   def merge(other: SpaceSavingSumSketch): Unit = {
-    other match {
-      case ssAdapter: SpaceSavingSumSketch =>
-        ssAdapter.elementSums.foreach { case (item, sumWeight) =>
-          elementSums.update(item, elementSums.getOrElse(item, 0.0) + sumWeight)
-        }
-
-      case _ => throw new IllegalArgumentException("Cannot merge with incompatible sketch")
+    other.elementSums.foreach { case (item, sumWeight) =>
+      elementSums.update(item, elementSums.getOrElse(item, 0L) + sumWeight)
     }
   }
 
-  def getTopK: Seq[(String, Double)] = {
-    // Return only the Top K elements sorted by summed weight descending
-    elementSums.toSeq.sortBy(-_._2).take(k)
-  }
+  def getTopK: Seq[(String, Long)] =
+    elementSums.toSeq.sortBy(-_._2).take(k) // <--- Return type Long
 
   def serialize(): Array[Byte] = {
-    // Serialize the elementSums map to a string in a safer way
     val sumsString = elementSums
       .map { case (item, sum) =>
         val encodedKey = Base64.getEncoder.encodeToString(item.getBytes("UTF-8"))
         s"$encodedKey:$sum"
       }
       .mkString("\n")
-
     sumsString.getBytes("UTF-8")
   }
 
   def deserialize(bytes: Array[Byte]): SpaceSavingSumSketch = {
     val sumsString = new String(bytes, "UTF-8")
-
-    // Create a new sketch and restore state with defensive parsing
     val sketch = new SpaceSavingSumSketch(k)
-
     sumsString.split("\n").foreach { entry =>
       val parts = entry.split(":")
       if (parts.length == 2) {
         try {
           val decodedKey = new String(Base64.getDecoder.decode(parts(0)), "UTF-8")
-          val sumValue = parts(1).toDouble
+          val sumValue = parts(1).toLong // <--- Changed to Long
           sketch.elementSums.update(decodedKey, sumValue)
         } catch {
           case _: IllegalArgumentException => // Ignore corrupted lines
         }
       }
     }
-
     sketch
   }
 }
