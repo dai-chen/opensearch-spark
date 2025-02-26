@@ -45,7 +45,8 @@ class SpaceSavingSumSketch(k: Int, tracked: Int) {
   def serialize(): Array[Byte] = {
     val sumsString = elementSums
       .map { case (item, sum) =>
-        val encodedKey = Base64.getEncoder.encodeToString(item.getBytes("UTF-8"))
+        val cleanedItem = item.replace("[", "").replace("]", "")
+        val encodedKey = Base64.getEncoder.encodeToString(cleanedItem.getBytes("UTF-8"))
         s"$encodedKey:$sum"
       }
       .mkString("\n")
@@ -60,8 +61,9 @@ class SpaceSavingSumSketch(k: Int, tracked: Int) {
       if (parts.length == 2) {
         try {
           val decodedKey = new String(Base64.getDecoder.decode(parts(0)), "UTF-8")
+          val cleanedKey = decodedKey.replace("[", "").replace("]", "")
           val sumValue = parts(1).toLong // <--- Changed to Long
-          sketch.elementSums.update(decodedKey, sumValue)
+          sketch.elementSums.update(cleanedKey, sumValue)
         } catch {
           case _: IllegalArgumentException => // Ignore corrupted lines
         }
