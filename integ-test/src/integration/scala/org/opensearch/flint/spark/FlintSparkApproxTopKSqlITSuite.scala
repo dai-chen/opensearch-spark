@@ -5,8 +5,10 @@
 
 package org.opensearch.flint.spark
 
+import org.json4s._
+import org.json4s.jackson.JsonMethods._
 import org.opensearch.action.search.{SearchRequest, SearchRequestBuilder}
-import org.opensearch.client.RequestOptions
+import org.opensearch.client.{RequestOptions, Requests}
 import org.opensearch.flint.spark.mv.FlintSparkMaterializedView.getFlintIndexName
 import org.opensearch.index.query.QueryBuilders
 
@@ -27,9 +29,13 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
     sql(s"DROP TABLE $testTable")
   }
 
-  Seq("accurate", "misra_gries", "cms", "space_saving").foreach { (algorithm) =>
-    test(s"approx top count by $algorithm algorithm") {
-      val approx_top_count = s"approx_top_count_$algorithm"
+  Seq(
+    "approx_top_count",
+    "approx_top_count_accurate",
+    "approx_top_count_misra_gries",
+    "approx_top_count_cms",
+    "approx_top_count_space_saving").foreach { (approx_top_count) =>
+    test(s"approx top count by $approx_top_count") {
       sql(s"""
            | SELECT
            |   window.start,
@@ -52,10 +58,14 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
            |""".stripMargin).show(false)
   }
 
-  Seq("accurate", "misra_gries", "cms", "space_saving").foreach { (algorithm) =>
-    test(s"approx top count by $algorithm algorithm with auto-refresh MV") {
+  Seq(
+    "approx_top_count",
+    "approx_top_count_accurate",
+    "approx_top_count_misra_gries",
+    "approx_top_count_cms",
+    "approx_top_count_space_saving").foreach { (approx_top_count) =>
+    test(s"approx top count by $approx_top_count with auto-refresh MV") {
       withTempDir { checkpointDir =>
-        val approx_top_count = s"approx_top_count_$algorithm"
         sql(s"""
              | CREATE MATERIALIZED VIEW $mvName
              | AS
@@ -80,7 +90,8 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
         val request = new SearchRequest(flintIndexName)
         request.source().query(QueryBuilders.matchAllQuery())
         val response = openSearchClient.search(request, RequestOptions.DEFAULT)
-        logInfo("Response: " + response)
+        val prettyJson = pretty(render(parse(response.toString)))
+        logInfo("Response: \n" + prettyJson)
       }
     }
   }
