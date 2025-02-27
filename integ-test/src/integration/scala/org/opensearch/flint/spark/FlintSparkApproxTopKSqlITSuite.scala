@@ -31,6 +31,7 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
 
   Seq(
     "approx_top_count",
+    "approx_top_count_stream_summary",
     "approx_top_count_accurate",
     "approx_top_count_misra_gries",
     "approx_top_count_cms",
@@ -60,6 +61,7 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
 
   Seq(
     "approx_top_count",
+    "approx_top_count_stream_summary",
     "approx_top_count_accurate",
     "approx_top_count_misra_gries",
     "approx_top_count_cms",

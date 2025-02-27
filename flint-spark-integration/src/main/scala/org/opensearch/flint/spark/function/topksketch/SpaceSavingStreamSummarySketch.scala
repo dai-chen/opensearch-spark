@@ -19,7 +19,9 @@ import org.opensearch.flint.spark.function.topksketch.streamsummary.StreamSummar
  * @param tracked
  *   The internal capacity of StreamSummary.
  */
-class SpaceSavingStreamSummarySketch(k: Int, tracked: Int) extends TopKSketch[String] with Serializable {
+class SpaceSavingStreamSummarySketch(k: Int, tracked: Int)
+    extends TopKSketch[String]
+    with Serializable {
 
   // Validate input parameters
   require(k > 0, "k must be greater than 0")
