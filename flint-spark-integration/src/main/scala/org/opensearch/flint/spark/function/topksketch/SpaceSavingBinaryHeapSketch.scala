@@ -5,56 +5,57 @@
 
 package org.opensearch.flint.spark.function.topksketch
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream, Serializable}
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.collection.mutable.PriorityQueue
+
+import com.google.common.collect.MinMaxPriorityQueue
 
 /**
- * Heap-Based Space-Saving Sketch that efficiently tracks Top K elements. Uses a HashMap for fast
- * lookups and a Min-Heap (PriorityQueue) for maintaining order.
+ * Space-Saving Algorithm using Guava's MinMaxPriorityQueue
  */
 class SpaceSavingBinaryHeapSketch(k: Int, tracked: Int)
     extends TopKSketch[String]
     with Serializable {
 
-  // HashMap to store elements and their counts
+  // HashMap to store element counts
   private val elementCounts = mutable.Map.empty[String, Long]
 
-  // Min-Heap to maintain the Top K order
-  private val minHeap: PriorityQueue[(String, Long)] =
-    PriorityQueue.empty(Ordering.by[(String, Long), Long](_._2).reverse) // Min-Heap
+  // Min-Heap using Guava's MinMaxPriorityQueue
+  private val minHeap: MinMaxPriorityQueue[(String, Long)] =
+    MinMaxPriorityQueue
+      .orderedBy[(String, Long)](Ordering.by(_._2)) // Min-Heap Order
+      .maximumSize(tracked)
+      .create()
 
-  override def update(item: String): Unit = {
-    update(item, 1)
-  }
+  def update(item: String): Unit = update(item, 1)
 
   def update(item: String, increment: Long): Unit = {
     if (elementCounts.contains(item)) {
-      // **FIX 1: Remove previous entry from heap before updating**
-      minHeap.dequeueAll.filterNot(_._1 == item).foreach { case (item, count) =>
-        minHeap.enqueue((item, count))
-      }
+      // **Remove old value from heap before updating**
+      val oldValue = elementCounts(item)
+      minHeap.remove((item, oldValue)) // Guava requires exact object removal!
 
-      // Increment count in HashMap
-      elementCounts.update(item, elementCounts(item) + increment)
+      // **Update HashMap**
+      val newValue = oldValue + increment
+      elementCounts.update(item, newValue)
+
+      // **Reinsert updated element into heap**
+      minHeap.add((item, newValue))
     } else if (elementCounts.size < tracked) {
-      // Add new item if there's space
+      // **Insert new item if space is available**
       elementCounts.update(item, increment)
+      minHeap.add((item, increment))
     } else {
-      // **FIX 2: Properly remove the smallest element from both heap and hashmap**
-      val (minItem, minCount) = minHeap.dequeue() // Remove smallest count from heap
+      // **Remove smallest element and replace with new**
+      val (minItem, minCount) = minHeap.poll() // Remove smallest from heap
       elementCounts.remove(minItem) // Remove from HashMap
 
-      // Add new item with updated count
+      // **Add new element**
       elementCounts.update(item, minCount + increment)
+      minHeap.add((item, minCount + increment))
     }
-
-    // **Ensure Heap is in sync with HashMap**
-    minHeap.enqueue((item, elementCounts(item)))
-
-    // **Ensure Heap size stays within K**
-    while (minHeap.size > k) minHeap.dequeue()
   }
 
   override def merge(other: TopKSketch[String]): Unit = {
@@ -69,8 +70,8 @@ class SpaceSavingBinaryHeapSketch(k: Int, tracked: Int)
   }
 
   override def getTopK: Seq[(String, Long)] = {
-    // Extract top K elements from heap in descending order
-    minHeap.clone().dequeueAll.reverse
+    // Create a snapshot of the heap without modifying it
+    minHeap.iterator().asScala.toSeq.sortBy(-_._2).take(k)
   }
 
   override def serialize(): Array[Byte] = {

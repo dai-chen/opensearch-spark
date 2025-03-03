@@ -40,7 +40,7 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
       sql(s"""
            | SELECT
            |   window.start,
-           |   $approx_top_count(productId, 5, 10),
+           |   $approx_top_count(productId, 2, 10),
            |   $approx_top_count(customerId, 2, 10)
            | FROM $testTable
            | GROUP BY TUMBLE(transactionDate, '1 week')

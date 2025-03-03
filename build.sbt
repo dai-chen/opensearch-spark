@@ -224,6 +224,7 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
     name := "flint-spark-integration",
     scalaVersion := scala212,
     libraryDependencies ++= Seq(
+      "com.google.guava" % "guava" % "32.1.2-jre",
       "com.amazonaws" % "aws-java-sdk" % "1.12.397" % "provided"
         exclude ("com.fasterxml.jackson.core", "jackson-databind"),
       "org.scalactic" %% "scalactic" % "3.2.15" % "test",
