@@ -21,9 +21,10 @@ case class ApproxTopKAggSum(
     weightExpr: Expression,
     k: Int,
     tracked: Int,
+    createSketch: (Int, Int) => TopKSketch[String],
     override val mutableAggBufferOffset: Int = 0,
     override val inputAggBufferOffset: Int = 0)
-    extends TypedImperativeAggregate[SpaceSavingSumSketch] {
+    extends TypedImperativeAggregate[TopKSketch[String]] {
 
   override def nullable: Boolean = false
 
@@ -39,29 +40,27 @@ case class ApproxTopKAggSum(
 
   override def children: Seq[Expression] = Seq(keyExpr, weightExpr)
 
-  override def createAggregationBuffer(): SpaceSavingSumSketch =
-    new SpaceSavingSumSketch(k, tracked)
+  override def createAggregationBuffer(): TopKSketch[String] =
+    createSketch(k, tracked)
 
-  override def update(
-      buffer: SpaceSavingSumSketch,
-      inputRow: InternalRow): SpaceSavingSumSketch = {
+  override def update(buffer: TopKSketch[String], inputRow: InternalRow): TopKSketch[String] = {
     val key = keyExpr.eval(inputRow)
     val weight = weightExpr.eval(inputRow)
     if (key != null && weight != null) {
       val weightValue = weight.asInstanceOf[Number].longValue() // Changed to Long
-      buffer.update((key.toString, weightValue))
+      buffer.update(key.toString, weightValue)
     }
     buffer
   }
 
   override def merge(
-      buffer: SpaceSavingSumSketch,
-      input: SpaceSavingSumSketch): SpaceSavingSumSketch = {
+      buffer: TopKSketch[String],
+      input: TopKSketch[String]): TopKSketch[String] = {
     buffer.merge(input)
     buffer
   }
 
-  override def eval(buffer: SpaceSavingSumSketch): Any = {
+  override def eval(buffer: TopKSketch[String]): Any = {
     val resultArray = buffer.getTopK.map { case (key, sum) =>
       val row = new GenericInternalRow(2)
       row.update(0, convertToDataType(key, keyExpr.dataType))
@@ -89,19 +88,19 @@ case class ApproxTopKAggSum(
     case _ => throw new IllegalArgumentException(s"Unsupported data type: $targetType")
   }
 
-  override def serialize(buffer: SpaceSavingSumSketch): Array[Byte] = buffer.serialize()
-  override def deserialize(bytes: Array[Byte]): SpaceSavingSumSketch =
-    new SpaceSavingSumSketch(k, tracked).deserialize(bytes)
+  override def serialize(buffer: TopKSketch[String]): Array[Byte] = buffer.serialize()
+  override def deserialize(bytes: Array[Byte]): TopKSketch[String] =
+    createSketch(k, tracked).deserialize(bytes)
 
   override protected def withNewChildrenInternal(
-      newChildren: IndexedSeq[Expression]): TypedImperativeAggregate[SpaceSavingSumSketch] =
+      newChildren: IndexedSeq[Expression]): TypedImperativeAggregate[TopKSketch[String]] =
     copy(keyExpr = newChildren.head, weightExpr = newChildren(1))
 
   override def withNewMutableAggBufferOffset(
-      newOffset: Int): TypedImperativeAggregate[SpaceSavingSumSketch] =
+      newOffset: Int): TypedImperativeAggregate[TopKSketch[String]] =
     copy(mutableAggBufferOffset = newOffset)
 
   override def withNewInputAggBufferOffset(
-      newOffset: Int): TypedImperativeAggregate[SpaceSavingSumSketch] =
+      newOffset: Int): TypedImperativeAggregate[TopKSketch[String]] =
     copy(inputAggBufferOffset = newOffset)
 }

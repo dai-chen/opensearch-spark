@@ -48,15 +48,17 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
     }
   }
 
-  test(s"approx top sum") {
-    sql(s"""
+  Seq("approx_top_sum", "approx_top_sum_hashmap").foreach { approx_top_sum =>
+    test(s"approx top sum by $approx_top_sum") {
+      sql(s"""
            | SELECT
            |   window.start,
-           |   approx_top_sum(productId, productsAmount, 5, 10),
-           |   approx_top_sum(struct(productId, customerId), productsAmount, 5, 10)
+           |   $approx_top_sum(productId, productsAmount, 5, 10),
+           |   $approx_top_sum(struct(productId, customerId), productsAmount, 5, 10)
            | FROM $testTable
            | GROUP BY TUMBLE(transactionDate, '1 week')
            |""".stripMargin).show(false)
+    }
   }
 
   Seq(

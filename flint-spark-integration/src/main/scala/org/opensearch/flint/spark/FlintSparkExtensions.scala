@@ -6,8 +6,9 @@
 package org.opensearch.flint.spark
 
 import org.opensearch.flint.spark.function.{ApproxTopKAggSum, ApproxTopKFunction, ApproxTopSumFunction, TumbleFunction}
-import org.opensearch.flint.spark.function.topksketch.{AccurateTopKSketch, CountMinSketch, MisraGriesSketch, ParallelSpaceSavingSketch, SpaceSavingBinaryHeapSketch, SpaceSavingSketch, SpaceSavingStreamSummarySketch}
+import org.opensearch.flint.spark.function.topksketch.{AccurateTopKSketch, CountMinSketch, MisraGriesSketch, ParallelSpaceSavingSketch, SpaceSavingBinaryHeapSketch, SpaceSavingSketch, SpaceSavingStreamSummarySketch, SpaceSavingSumSketch}
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
+
 import org.apache.spark.sql.SparkSessionExtensions
 
 /**
@@ -21,6 +22,8 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
     }
 
     extensions.injectFunction(TumbleFunction.description)
+
+    // Approximate top count functions
     extensions.injectFunction(
       ApproxTopKFunction("approx_top_count_accurate", (k, tracked) => new AccurateTopKSketch(k)))
     extensions.injectFunction(
@@ -44,7 +47,15 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
         // (k, tracked) => new SpaceSavingBinaryHeapSketch(k, tracked)))
         (k, tracked) => new ParallelSpaceSavingSketch(k, tracked)))
 
-    extensions.injectFunction(ApproxTopSumFunction.description)
+    // Approximate top sum functions
+    extensions.injectFunction(
+      ApproxTopSumFunction(
+        "approx_top_sum",
+        (k, tracked) => new ParallelSpaceSavingSketch(k, tracked)))
+    extensions.injectFunction(
+      ApproxTopSumFunction(
+        "approx_top_sum_hashmap",
+        (k, tracked) => new SpaceSavingSumSketch(k, tracked)))
 
     extensions.injectOptimizerRule { spark =>
       new FlintSparkOptimizer(spark)

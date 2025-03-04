@@ -106,4 +106,6 @@ class CountMinSketch(k: Int, width: Int = 8192, depth: Int = 10, seed: Int = 42)
     }
     sketch
   }
+
+  override def update(item: String, weight: Long): Unit = {}
 }

@@ -49,4 +49,6 @@ class MisraGriesSketch(k: Int, tracked: Int) extends TopKSketch[String] {
     if (x <= 0) 1
     else 1 << (32 - Integer.numberOfLeadingZeros(x - 1))
   }
+
+  override def update(item: String, weight: Long): Unit = {}
 }

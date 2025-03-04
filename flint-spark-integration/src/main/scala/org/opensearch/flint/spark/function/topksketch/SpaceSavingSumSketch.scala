@@ -14,13 +14,16 @@ import scala.collection.mutable
  * Space-Saving Sketch for APPROX_TOP_SUM. Tracks the Top K elements with the highest approximate
  * summed weights.
  */
-class SpaceSavingSumSketch(k: Int, tracked: Int) {
+class SpaceSavingSumSketch(k: Int, tracked: Int) extends TopKSketch[String] {
   // private val tracked = 1000
   private val elementSums =
     mutable.Map.empty[String, Long] // <--- Changed Double to Long only here
 
-  def update(item: (String, Long)): Unit = {
-    val (key, weight) = item
+  override def update(key: String): Unit = {
+    update(key, 1)
+  }
+
+  override def update(key: String, weight: Long): Unit = {
     if (weight < 0) throw new IllegalArgumentException("Weight must be non-negative")
     if (elementSums.contains(key)) {
       elementSums.update(key, elementSums(key) + weight)
@@ -33,9 +36,14 @@ class SpaceSavingSumSketch(k: Int, tracked: Int) {
     }
   }
 
-  def merge(other: SpaceSavingSumSketch): Unit = {
-    other.elementSums.foreach { case (item, sumWeight) =>
-      elementSums.update(item, elementSums.getOrElse(item, 0L) + sumWeight)
+  def merge(other: TopKSketch[String]): Unit = {
+    other match {
+      case ss: SpaceSavingSumSketch =>
+        ss.elementSums.foreach { case (item, sumWeight) =>
+          elementSums.update(item, elementSums.getOrElse(item, 0L) + sumWeight)
+        }
+
+      case _ => throw new IllegalArgumentException("Cannot merge with incompatible sketch")
     }
   }
 
@@ -53,7 +61,7 @@ class SpaceSavingSumSketch(k: Int, tracked: Int) {
     sumsString.getBytes("UTF-8")
   }
 
-  def deserialize(bytes: Array[Byte]): SpaceSavingSumSketch = {
+  def deserialize(bytes: Array[Byte]): TopKSketch[String] = {
     val sumsString = new String(bytes, "UTF-8")
     val sketch = new SpaceSavingSumSketch(k, tracked)
     sumsString.split("\n").foreach { entry =>

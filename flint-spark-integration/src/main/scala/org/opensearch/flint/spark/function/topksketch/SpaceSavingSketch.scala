@@ -84,4 +84,6 @@ class SpaceSavingSketch(k: Int, tracked: Int) extends TopKSketch[String] {
     }
     sketch
   }
+
+  override def update(item: String, weight: Long): Unit = {}
 }

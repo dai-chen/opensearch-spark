@@ -16,6 +16,8 @@ class AccurateTopKSketch[T](k: Int) extends TopKSketch[T] {
   // private implicit val ordering: Ordering[(T, Long)] = Ordering.by(_._2) // Min-Heap based on count
   // private val topKHeap = mutable.PriorityQueue.empty[(T, Long)]
 
+  override def update(item: T, weight: Long): Unit = {}
+
   override def update(item: T): Unit = {
     // Increment the count for the item
     itemCounts.update(item, itemCounts.getOrElse(item, 0L) + 1)
