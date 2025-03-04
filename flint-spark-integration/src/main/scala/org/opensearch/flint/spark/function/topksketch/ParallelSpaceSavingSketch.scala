@@ -5,11 +5,14 @@
 
 package org.opensearch.flint.spark.function.topksketch
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.ByteBuffer
 import java.util.Base64
 
 import scala.collection.mutable
+
+import com.esotericsoftware.kryo.Kryo
+import com.esotericsoftware.kryo.io.{Input, Output}
 
 /**
  * Efficient Parallel Space-Saving Sketch implementation for Top-K estimation. Implements the
@@ -148,40 +151,75 @@ class ParallelSpaceSavingSketch(k: Int, tracked: Int)
   }
 
   override def serialize(): Array[Byte] = {
-    val byteStream = new ByteArrayOutputStream()
-    val objectStream = new ObjectOutputStream(byteStream)
+    val baos = new ByteArrayOutputStream()
+    val dos = new DataOutputStream(baos)
+
     try {
-      // Write the state
-      objectStream.writeObject(counterMap)
-      objectStream.writeObject(counterList)
-      objectStream.writeObject(alphaMap)
-      byteStream.toByteArray
+      // Write counterMap size and entries
+      dos.writeInt(counterMap.size)
+      for ((key, counter) <- counterMap) {
+        dos.writeUTF(key)
+        dos.writeLong(counter.count)
+        dos.writeLong(counter.error)
+      }
+
+      // Write counterList size and entries
+      dos.writeInt(counterList.size)
+      for ((key, counter) <- counterList) {
+        dos.writeUTF(key)
+        dos.writeLong(counter.count)
+        dos.writeLong(counter.error)
+      }
+
+      // Write alphaMap
+      dos.writeInt(alphaMap.length)
+      for (alpha <- alphaMap) {
+        dos.writeLong(alpha)
+      }
+
+      dos.flush()
+      baos.toByteArray
     } finally {
-      objectStream.close()
-      byteStream.close()
+      dos.close()
+      baos.close()
     }
   }
 
   override def deserialize(bytes: Array[Byte]): TopKSketch[String] = {
-    val byteStream = new ByteArrayInputStream(bytes)
-    val objectStream = new ObjectInputStream(byteStream)
+    val bis = new ByteArrayInputStream(bytes)
+    val dis = new DataInputStream(bis)
+
     try {
-      // Read the state in the same order as serialized
+      // Read counterMap
       counterMap.clear()
-      counterMap ++= objectStream.readObject().asInstanceOf[mutable.HashMap[String, Counter]]
+      val mapSize = dis.readInt()
+      for (_ <- 0 until mapSize) {
+        val key = dis.readUTF()
+        val count = dis.readLong()
+        val error = dis.readLong()
+        counterMap(key) = Counter(count, error)
+      }
 
+      // Read counterList
       counterList.clear()
-      counterList ++= objectStream
-        .readObject()
-        .asInstanceOf[mutable.ArrayBuffer[(String, Counter)]]
+      val listSize = dis.readInt()
+      for (_ <- 0 until listSize) {
+        val key = dis.readUTF()
+        val count = dis.readLong()
+        val error = dis.readLong()
+        counterList.append((key, Counter(count, error)))
+      }
 
-      val newAlphaMap = objectStream.readObject().asInstanceOf[Array[Long]]
-      Array.copy(newAlphaMap, 0, alphaMap, 0, alphaMap.length)
+      // Read alphaMap
+      val alphaSize = dis.readInt()
+      for (i <- 0 until alphaSize) {
+        alphaMap(i) = dis.readLong()
+      }
 
       this
     } finally {
-      objectStream.close()
-      byteStream.close()
+      dis.close()
+      bis.close()
     }
   }
 
