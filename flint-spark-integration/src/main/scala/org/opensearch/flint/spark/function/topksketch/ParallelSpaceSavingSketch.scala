@@ -5,14 +5,9 @@
 
 package org.opensearch.flint.spark.function.topksketch
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream, ObjectInputStream, ObjectOutputStream}
-import java.nio.ByteBuffer
-import java.util.Base64
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
 
 import scala.collection.mutable
-
-import com.esotericsoftware.kryo.Kryo
-import com.esotericsoftware.kryo.io.{Input, Output}
 
 /**
  * Efficient Parallel Space-Saving Sketch implementation for Top-K estimation. Implements the
@@ -25,21 +20,46 @@ class ParallelSpaceSavingSketch(k: Int, tracked: Int)
     extends TopKSketch[String]
     with Serializable {
 
-  // Main counter map to store elements and their counts/errors
+  case class Counter(var count: Long, var error: Long, var slot: Int = 0, var hash: Int = 0)
+
   private val counterMap = mutable.HashMap.empty[String, Counter]
-
-  // Alpha map for monitoring frequency of untracked elements
   private val alphaMap = new Array[Long](nextAlphaSize(tracked))
-
-  // Sorted list of elements by count (descending)
   private val counterList = mutable.ArrayBuffer.empty[(String, Counter)]
-
-  // Also, let's track removed keys
   private var removedKeys: Int = 0
 
-  private def nextAlphaSize(x: Int): Int = {
+  private def nextAlphaSize(x: Long): Int = {
     val alphaMapElementsPerCounter = 6
-    1 << (64 - java.lang.Long.numberOfLeadingZeros(x * alphaMapElementsPerCounter - 1))
+    (1L << (64 - java.lang.Long.numberOfLeadingZeros(x * alphaMapElementsPerCounter))).toInt
+  }
+
+  private def push(item: String, counter: Counter): Unit = {
+    counter.slot = counterList.size
+    counterList.append((item, counter))
+    counterMap(item) = counter
+    percolate(counter)
+  }
+
+  // This is equivalent to one step of bubble sort
+  private def percolate(counter: Counter): Unit = {
+    while (counter.slot > 0) {
+      val prevIdx = counter.slot - 1
+      val prev = counterList(prevIdx)._2
+
+      if (counter.count > prev.count ||
+        (counter.count == prev.count && counter.error < prev.error)) {
+        // Swap elements
+        val temp = counterList(counter.slot)
+        counterList(counter.slot) = counterList(prevIdx)
+        counterList(prevIdx) = temp
+
+        // Update slots
+        val tempSlot = counter.slot
+        counter.slot = prev.slot
+        prev.slot = tempSlot
+      } else {
+        return
+      }
+    }
   }
 
   override def update(item: String): Unit = {
@@ -58,36 +78,45 @@ class ParallelSpaceSavingSketch(k: Int, tracked: Int)
       case Some(counter) =>
         counter.count += increment
         counter.error += error
-        reorderCounters()
+        percolate(counter)
         return
       case None =>
     }
 
     // Case 2: Space available in tracking list
     if (counterList.size < tracked) {
-      val counter = Counter(increment, error)
-      counterMap(item) = counter
-      counterList.append((item, counter))
+      val counter = Counter(increment, error, counterList.size, hash)
+      push(item, counter)
       return
     }
 
-    // Case 3: Need to use alpha map and possibly replace minimum
+    val minCounter = counterList.last._2
+
+    // Case 3: New key has bigger weight than minimum counter
+    // This case is important for weighted top-k
+    if (increment > minCounter.count) {
+      destroyLastElement()
+      val counter = Counter(increment, error, counterList.size, hash)
+      push(item, counter)
+      return
+    }
+
+    // Case 4: Need to use alpha map and possibly replace minimum
     val alphaMask = alphaMap.length - 1
     val alphaIdx = (hash & alphaMask).toInt
-    val minCounter = counterList.last._2
 
     if (alphaMap(alphaIdx) + increment < minCounter.count) {
       alphaMap(alphaIdx) += increment
     } else {
-      // Use destroyLastElement instead of direct removal
       alphaMap(alphaIdx) = minCounter.count
       destroyLastElement()
 
-      val newCounter =
-        Counter(count = alphaMap(alphaIdx) + increment, error = alphaMap(alphaIdx) + error)
-
-      counterMap(item) = newCounter
-      counterList.append((item, newCounter))
+      val newCounter = Counter(
+        count = alphaMap(alphaIdx) + increment,
+        error = alphaMap(alphaIdx) + error,
+        slot = counterList.size,
+        hash = hash)
+      push(item, newCounter)
     }
   }
 
@@ -106,44 +135,65 @@ class ParallelSpaceSavingSketch(k: Int, tracked: Int)
         }
 
         // Merge other sketch's counters
-        ss.counterList.foreach { case (item, otherCounter) =>
+        for (other <- ss.counterList.reverseIterator) { // Note: scanning in reverse as per ClickHouse
+          val (item, otherCounter) = other
           counterMap.get(item) match {
             case Some(counter) =>
+              // Subtract m2 previously added, guaranteed not negative
               counter.count += (otherCounter.count - m2)
               counter.error += (otherCounter.error - m2)
             case None =>
-              val newCounter =
-                Counter(count = otherCounter.count + m1, error = otherCounter.error + m1)
+              // Counters not monitored in S1
+              val newCounter = Counter(
+                count = otherCounter.count + m1,
+                error = otherCounter.error + m1,
+                slot = counterList.size,
+                hash = item.hashCode)
               counterMap(item) = newCounter
               counterList.append((item, newCounter))
           }
         }
 
         // Sort and trim to capacity
-        reorderCounters()
+        import scala.collection.JavaConverters._
+        java.util.Collections.sort(
+          counterList.asJava,
+          (a: (String, Counter), b: (String, Counter)) => {
+            if (a._2.count > b._2.count ||
+              (a._2.count == b._2.count && a._2.error < b._2.error)) { -1 }
+            else if (a._2.count == b._2.count && a._2.error == b._2.error) { 0 }
+            else { 1 }
+          })
+
         if (counterList.size > tracked) {
-          val toRemove = counterList.drop(tracked)
-          toRemove.foreach { case (item, _) => counterMap.remove(item) }
           counterList.remove(tracked, counterList.size - tracked)
         }
 
-        // Rebuild counter map to ensure consistency
+        // Update slots after sorting
+        for (i <- counterList.indices) {
+          counterList(i)._2.slot = i
+        }
         rebuildCounterMap()
-
-      case _ => throw new IllegalArgumentException("Cannot merge with incompatible sketch")
     }
   }
 
-  private def reorderCounters(): Unit = {
-    // In-place sorting using ArrayBuffer's sortWith
-    import scala.collection.JavaConverters._
-    java.util.Collections.sort(
-      counterList.asJava,
-      (a: (String, Counter), b: (String, Counter)) => {
-        val countCompare = java.lang.Long.compare(b._2.count, a._2.count) // descending
-        if (countCompare != 0) countCompare
-        else java.lang.Long.compare(a._2.error, b._2.error) // ascending
-      })
+  private def destroyLastElement(): Unit = {
+    val (item, _) = counterList.last
+    counterMap.remove(item)
+    counterList.remove(counterList.size - 1)
+
+    removedKeys += 1
+    if (removedKeys * 2 > counterMap.size) {
+      rebuildCounterMap()
+    }
+  }
+
+  private def rebuildCounterMap(): Unit = {
+    removedKeys = 0
+    counterMap.clear()
+    counterList.foreach { case (item, counter) =>
+      counterMap(item) = counter
+    }
   }
 
   override def getTopK: Seq[(String, Long)] = {
@@ -220,26 +270,6 @@ class ParallelSpaceSavingSketch(k: Int, tracked: Int)
     } finally {
       dis.close()
       bis.close()
-    }
-  }
-
-  private def destroyLastElement(): Unit = {
-    val (item, _) = counterList.last
-    counterMap.remove(item)
-    counterList.remove(counterList.size - 1)
-
-    removedKeys += 1
-    // Rebuild counter map if too many removals have occurred
-    if (removedKeys * 2 > counterMap.size) {
-      rebuildCounterMap()
-    }
-  }
-
-  private def rebuildCounterMap(): Unit = {
-    removedKeys = 0
-    counterMap.clear()
-    counterList.foreach { case (item, counter) =>
-      counterMap(item) = counter
     }
   }
 }

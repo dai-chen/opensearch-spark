@@ -5,6 +5,8 @@
 
 package org.opensearch.flint.spark.function.topksketch
 
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
+
 import scala.collection.mutable
 
 class AccurateTopKSketch[T](k: Int) extends TopKSketch[T] {
@@ -54,17 +56,41 @@ class AccurateTopKSketch[T](k: Int) extends TopKSketch[T] {
   }
 
   override def serialize(): Array[Byte] = {
-    // Serialization for testing purposes (not optimized)
-    itemCounts.toArray.map { case (item, count) => s"$item:$count" }.mkString(",").getBytes
+    val baos = new ByteArrayOutputStream()
+    val dos = new DataOutputStream(baos)
+
+    try {
+      dos.writeInt(itemCounts.size)
+      itemCounts.foreach { case (item, count) =>
+        dos.writeUTF(item.asInstanceOf[String])
+        dos.writeLong(count)
+      }
+      dos.flush()
+      baos.toByteArray
+    } finally {
+      dos.close()
+      baos.close()
+    }
   }
 
   override def deserialize(bytes: Array[Byte]): TopKSketch[T] = {
-    val data = new String(bytes).split(",").map { entry =>
-      val Array(item, count) = entry.split(":")
-      item.asInstanceOf[T] -> count.toLong
+    val bis = new ByteArrayInputStream(bytes)
+    val dis = new DataInputStream(bis)
+
+    try {
+      val size = dis.readInt()
+      val sketch = new AccurateTopKSketch[T](k)
+
+      for (_ <- 0 until size) {
+        val item = dis.readUTF().asInstanceOf[T]
+        val count = dis.readLong()
+        sketch.itemCounts(item) = count
+      }
+
+      sketch
+    } finally {
+      dis.close()
+      bis.close()
     }
-    val sketch = new AccurateTopKSketch[T](k)
-    sketch.itemCounts ++= data
-    sketch
   }
 }
