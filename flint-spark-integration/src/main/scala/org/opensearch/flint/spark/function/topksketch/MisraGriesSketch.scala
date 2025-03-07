@@ -11,6 +11,8 @@ import org.apache.datasketches.memory.Memory
 
 class MisraGriesSketch(k: Int, tracked: Int) extends TopKSketch[String] {
 
+  override val name: String = "misra_gries"
+
   private val sketch = new ItemsSketch[String](nextPowerOfTwo(tracked))
   private val serDe = new ArrayOfStringsSerDe()
 
@@ -50,5 +52,5 @@ class MisraGriesSketch(k: Int, tracked: Int) extends TopKSketch[String] {
     else 1 << (32 - Integer.numberOfLeadingZeros(x - 1))
   }
 
-  override def update(item: String, weight: Long): Unit = {}
+  override def update(item: String, increment: Long): Unit = {}
 }

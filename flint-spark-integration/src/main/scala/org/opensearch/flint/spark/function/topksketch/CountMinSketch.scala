@@ -16,6 +16,8 @@ import org.apache.spark.util.sketch.{CountMinSketch => SparkCountMinSketch}
 class CountMinSketch(k: Int, width: Int = 8192, depth: Int = 10, seed: Int = 42)
     extends TopKSketch[String] {
 
+  override val name: String = "cms"
+
   // Internal CMS
   private val cms = SparkCountMinSketch.create(width, depth, seed)
 
@@ -107,5 +109,5 @@ class CountMinSketch(k: Int, width: Int = 8192, depth: Int = 10, seed: Int = 42)
     sketch
   }
 
-  override def update(item: String, weight: Long): Unit = {}
+  override def update(item: String, increment: Long): Unit = {}
 }

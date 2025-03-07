@@ -16,6 +16,8 @@ import scala.collection.mutable
  */
 class SpaceSavingSketch(k: Int, tracked: Int) extends TopKSketch[String] {
 
+  override val name: String = "space_saving_hashmap"
+
   // Map to store elements and their counts
   private val elementCounts = mutable.Map.empty[String, Long]
 
@@ -85,5 +87,5 @@ class SpaceSavingSketch(k: Int, tracked: Int) extends TopKSketch[String] {
     sketch
   }
 
-  override def update(item: String, weight: Long): Unit = {}
+  override def update(item: String, increment: Long): Unit = {}
 }

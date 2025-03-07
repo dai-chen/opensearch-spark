@@ -5,11 +5,13 @@
 
 package org.opensearch.flint.spark.function.topksketch
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream, ObjectInputStream, ObjectOutputStream}
 
 import scala.collection.mutable
 
-class AccurateTopKSketch[T](k: Int) extends TopKSketch[T] {
+class AccurateSketch[T](k: Int) extends TopKSketch[T] with Serializable {
+
+  override val name: String = "accurate"
 
   // Internal map to track item counts
   private val itemCounts = mutable.HashMap.empty[T, Long]
@@ -18,16 +20,18 @@ class AccurateTopKSketch[T](k: Int) extends TopKSketch[T] {
   // private implicit val ordering: Ordering[(T, Long)] = Ordering.by(_._2) // Min-Heap based on count
   // private val topKHeap = mutable.PriorityQueue.empty[(T, Long)]
 
-  override def update(item: T, weight: Long): Unit = {}
-
   override def update(item: T): Unit = {
+    update(item, 1)
+  }
+
+  override def update(item: T, increment: Long): Unit = {
     // Increment the count for the item
-    itemCounts.update(item, itemCounts.getOrElse(item, 0L) + 1)
+    itemCounts.update(item, itemCounts.getOrElse(item, 0L) + increment)
   }
 
   override def merge(other: TopKSketch[T]): Unit = {
     other match {
-      case accurate: AccurateTopKSketch[T] =>
+      case accurate: AccurateSketch[T] =>
         // Merge item counts from the other sketch
         accurate.itemCounts.foreach { case (item, count) =>
           itemCounts.update(item, itemCounts.getOrElse(item, 0L) + count)
@@ -56,41 +60,18 @@ class AccurateTopKSketch[T](k: Int) extends TopKSketch[T] {
   }
 
   override def serialize(): Array[Byte] = {
-    val baos = new ByteArrayOutputStream()
-    val dos = new DataOutputStream(baos)
-
-    try {
-      dos.writeInt(itemCounts.size)
-      itemCounts.foreach { case (item, count) =>
-        dos.writeUTF(item.asInstanceOf[String])
-        dos.writeLong(count)
-      }
-      dos.flush()
-      baos.toByteArray
-    } finally {
-      dos.close()
-      baos.close()
-    }
+    val bos = new ByteArrayOutputStream()
+    val oos = new ObjectOutputStream(bos)
+    oos.writeObject(this)
+    oos.close()
+    bos.toByteArray
   }
 
   override def deserialize(bytes: Array[Byte]): TopKSketch[T] = {
     val bis = new ByteArrayInputStream(bytes)
-    val dis = new DataInputStream(bis)
-
-    try {
-      val size = dis.readInt()
-      val sketch = new AccurateTopKSketch[T](k)
-
-      for (_ <- 0 until size) {
-        val item = dis.readUTF().asInstanceOf[T]
-        val count = dis.readLong()
-        sketch.itemCounts(item) = count
-      }
-
-      sketch
-    } finally {
-      dis.close()
-      bis.close()
-    }
+    val ois = new ObjectInputStream(bis)
+    val obj = ois.readObject().asInstanceOf[AccurateSketch[T]]
+    ois.close()
+    obj
   }
 }

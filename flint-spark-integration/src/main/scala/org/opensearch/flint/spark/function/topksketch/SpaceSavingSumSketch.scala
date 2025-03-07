@@ -15,6 +15,9 @@ import scala.collection.mutable
  * summed weights.
  */
 class SpaceSavingSumSketch(k: Int, tracked: Int) extends TopKSketch[String] {
+
+  override val name: String = "deprecated"
+
   // private val tracked = 1000
   private val elementSums =
     mutable.Map.empty[String, Long] // <--- Changed Double to Long only here
@@ -23,16 +26,16 @@ class SpaceSavingSumSketch(k: Int, tracked: Int) extends TopKSketch[String] {
     update(key, 1)
   }
 
-  override def update(key: String, weight: Long): Unit = {
-    if (weight < 0) throw new IllegalArgumentException("Weight must be non-negative")
+  override def update(key: String, increment: Long): Unit = {
+    if (increment < 0) throw new IllegalArgumentException("Weight must be non-negative")
     if (elementSums.contains(key)) {
-      elementSums.update(key, elementSums(key) + weight)
+      elementSums.update(key, elementSums(key) + increment)
     } else if (elementSums.size < tracked) {
-      elementSums.update(key, weight)
+      elementSums.update(key, increment)
     } else {
       val (minItem, minWeight) = elementSums.minBy(_._2)
       elementSums.remove(minItem)
-      elementSums.update(key, weight + minWeight)
+      elementSums.update(key, increment + minWeight)
     }
   }
 

@@ -20,6 +20,8 @@ class ParallelSpaceSavingSketch(k: Int, tracked: Int)
     extends TopKSketch[String]
     with Serializable {
 
+  override val name: String = "space_saving_parallel"
+
   case class Counter(var count: Long, var error: Long, var slot: Int = 0, var hash: Int = 0)
 
   private val counterMap = mutable.HashMap.empty[String, Counter]

@@ -6,7 +6,7 @@
 package org.opensearch.flint.spark
 
 import org.opensearch.flint.spark.function.{ApproxTopKAggSum, ApproxTopKFunction, ApproxTopSumFunction, TumbleFunction}
-import org.opensearch.flint.spark.function.topksketch.{AccurateTopKSketch, CountMinSketch, MisraGriesSketch, ParallelSpaceSavingSketch, SpaceSavingBinaryHeapSketch, SpaceSavingSketch, SpaceSavingStreamSummarySketch, SpaceSavingSumSketch}
+import org.opensearch.flint.spark.function.topksketch.{AccurateSketch, CountMinSketch, MisraGriesSketch, ParallelSpaceSavingSketch, SpaceSavingBinaryTreeSketch, SpaceSavingSketch, SpaceSavingStreamSummarySketch}
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
 
 import org.apache.spark.sql.SparkSessionExtensions
@@ -25,7 +25,7 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
 
     // Approximate top count functions
     extensions.injectFunction(
-      ApproxTopKFunction("approx_top_count_accurate", (k, tracked) => new AccurateTopKSketch(k)))
+      ApproxTopKFunction("approx_top_count_accurate", (k, tracked) => new AccurateSketch(k)))
     extensions.injectFunction(
       ApproxTopKFunction(
         "approx_top_count_misra_gries",
@@ -34,28 +34,37 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
       ApproxTopKFunction("approx_top_count_cms", (k, tracked) => new CountMinSketch(k)))
     extensions.injectFunction(
       ApproxTopKFunction(
-        "approx_top_count_space_saving",
+        "approx_top_count_space_saving_hashmap",
         (k, tracked) => new SpaceSavingSketch(k, tracked)))
 
     extensions.injectFunction(
       ApproxTopKFunction(
-        "approx_top_count_stream_summary",
+        "approx_top_count_space_saving_stream_summary",
         (k, tracked) => new SpaceSavingStreamSummarySketch(k, tracked)))
     extensions.injectFunction(
       ApproxTopKFunction(
-        "approx_top_count",
-        // (k, tracked) => new SpaceSavingBinaryHeapSketch(k, tracked)))
+        "approx_top_count_space_saving_parallel",
         (k, tracked) => new ParallelSpaceSavingSketch(k, tracked)))
+    extensions.injectFunction(
+      ApproxTopKFunction(
+        "approx_top_count_space_saving_binary_tree",
+        (k, tracked) => new SpaceSavingBinaryTreeSketch(k, tracked)))
 
     // Approximate top sum functions
     extensions.injectFunction(
       ApproxTopSumFunction(
-        "approx_top_sum",
+        "approx_top_sum_space_saving_parallel",
         (k, tracked) => new ParallelSpaceSavingSketch(k, tracked)))
     extensions.injectFunction(
+      ApproxTopSumFunction("approx_top_sum_accurate", (k, tracked) => new AccurateSketch(k)))
+    extensions.injectFunction(
       ApproxTopSumFunction(
-        "approx_top_sum_hashmap",
-        (k, tracked) => new SpaceSavingSumSketch(k, tracked)))
+        "approx_top_sum_space_saving_hashmap",
+        (k, tracked) => new SpaceSavingSketch(k, tracked)))
+    extensions.injectFunction(
+      ApproxTopSumFunction(
+        "approx_top_sum_space_saving_binary_tree",
+        (k, tracked) => new SpaceSavingBinaryTreeSketch(k, tracked)))
 
     extensions.injectOptimizerRule { spark =>
       new FlintSparkOptimizer(spark)

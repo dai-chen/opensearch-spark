@@ -30,12 +30,13 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
   }
 
   Seq(
-    "approx_top_count",
-    "approx_top_count_stream_summary",
+    "approx_top_count_space_saving_hashmap",
+    "approx_top_count_space_saving_stream_summary",
+    "approx_top_count_space_saving_binary_tree",
     "approx_top_count_accurate",
     "approx_top_count_misra_gries",
     "approx_top_count_cms",
-    "approx_top_count_space_saving").foreach { (approx_top_count) =>
+    "approx_top_count_space_saving_parallel").foreach { (approx_top_count) =>
     test(s"approx top count by $approx_top_count") {
       sql(s"""
            | SELECT
@@ -48,7 +49,10 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
     }
   }
 
-  Seq("approx_top_sum", "approx_top_sum_hashmap").foreach { approx_top_sum =>
+  Seq(
+    "approx_top_sum_accurate",
+    "approx_top_sum_space_saving_hashmap",
+    "approx_top_sum_space_saving_binary_tree").foreach { approx_top_sum =>
     test(s"approx top sum by $approx_top_sum") {
       sql(s"""
            | SELECT
@@ -62,12 +66,13 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
   }
 
   Seq(
-    "approx_top_count",
-    "approx_top_count_stream_summary",
+    "approx_top_count_space_saving_hashmap",
+    "approx_top_count_space_saving_stream_summary",
+    "approx_top_count_space_saving_binary_tree",
     "approx_top_count_accurate",
     "approx_top_count_misra_gries",
     "approx_top_count_cms",
-    "approx_top_count_space_saving").foreach { (approx_top_count) =>
+    "approx_top_count_space_saving_parallel").foreach { (approx_top_count) =>
     test(s"approx top count by $approx_top_count with auto-refresh MV") {
       withTempDir { checkpointDir =>
         sql(s"""

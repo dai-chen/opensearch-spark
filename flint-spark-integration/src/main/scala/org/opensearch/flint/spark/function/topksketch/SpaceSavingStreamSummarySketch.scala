@@ -23,6 +23,8 @@ class SpaceSavingStreamSummarySketch(k: Int, tracked: Int)
     extends TopKSketch[String]
     with Serializable {
 
+  override val name: String = "space_saving_stream_summary"
+
   // Validate input parameters
   require(k > 0, "k must be greater than 0")
   require(tracked >= k, "tracked must be at least k")
@@ -39,8 +41,8 @@ class SpaceSavingStreamSummarySketch(k: Int, tracked: Int)
   }
 
   /** Update the sketch with a key and weight */
-  def update(item: String, count: Long): Unit = {
-    streamSummary.offer(item, count)
+  def update(item: String, increment: Long): Unit = {
+    streamSummary.offer(item, increment)
   }
 
   /** Merge another sketch into this one */

@@ -7,10 +7,12 @@ package org.opensearch.flint.spark.function.topksketch
 
 trait TopKSketch[T] {
 
+  val name: String
+
   /** Updates the sketch with a new item */
   def update(item: T): Unit
 
-  def update(item: T, weight: Long): Unit
+  def update(item: T, increment: Long): Unit
 
   /** Merges another sketch into this one */
   def merge(other: TopKSketch[T]): Unit

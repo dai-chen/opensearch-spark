@@ -19,6 +19,8 @@ class SpaceSavingBinaryHeapSketch(k: Int, tracked: Int)
     extends TopKSketch[String]
     with Serializable {
 
+  override val name: String = "space_saving_binary_heap"
+
   // HashMap to store element counts
   private val elementCounts = mutable.Map.empty[String, Long]
 
