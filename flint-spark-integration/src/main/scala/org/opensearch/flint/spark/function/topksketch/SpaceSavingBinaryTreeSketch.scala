@@ -85,7 +85,8 @@ class SpaceSavingBinaryTreeSketch(k: Int, tracked: Int)
         ssAdapter.countToItems.toSeq.reverse // merge high frequent item first
           .flatMap { case (count, items) =>
             items.map(item => (item, count))
-          }.foreach { case (item, count) =>
+          }
+          .foreach { case (item, count) =>
             update(item, count)
           }
       case _ => throw new IllegalArgumentException("Cannot merge with incompatible sketch")

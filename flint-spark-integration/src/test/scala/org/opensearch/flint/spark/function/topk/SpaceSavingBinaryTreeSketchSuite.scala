@@ -82,8 +82,8 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
   }
 
   private def createSketch(): TopKSketch[String] = {
-    new SpaceSavingBinaryTreeSketch(2, 5)
+    // new SpaceSavingBinaryTreeSketch(2, 5)
     // new ParallelSpaceSavingSketch(2, 5)
-    // new SpaceSavingSketch(2, 5)
+    new SpaceSavingSketch(2, 5)
   }
 }
