@@ -5,7 +5,7 @@
 
 package org.opensearch.flint.spark.function.topk
 
-import org.opensearch.flint.spark.function.topksketch.SpaceSavingBinaryTreeSketch
+import org.opensearch.flint.spark.function.topksketch.{ParallelSpaceSavingSketch, SpaceSavingBinaryTreeSketch, SpaceSavingSketch, TopKSketch}
 import org.scalatest.matchers.should.Matchers
 
 import org.apache.spark.FlintSuite
@@ -13,13 +13,14 @@ import org.apache.spark.FlintSuite
 class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
 
   test("space saving update") {
-    val sketch = new SpaceSavingBinaryTreeSketch(2, 5)
+    val sketch = createSketch()
 
     sketch.update("apple")
     sketch.update("apple")
     sketch.update("apple")
     logInfo(s"TopK: ${sketch.getTopK}")
     logInfo(s"Internal: $sketch")
+    sketch.getTopK shouldBe Seq(("apple", 3))
 
     sketch.update("orange")
     sketch.update("orange")
@@ -28,6 +29,7 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
     sketch.update("grape")
     logInfo(s"TopK: ${sketch.getTopK}")
     logInfo(s"Internal: $sketch")
+    sketch.getTopK shouldBe Seq(("apple", 3), ("orange", 2))
 
     // Full and swap
     sketch.update("pineapple")
@@ -41,10 +43,11 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
     sketch.update("pineapple")
     logInfo(s"TopK: ${sketch.getTopK}")
     logInfo(s"Internal: $sketch")
+    sketch.getTopK should contain theSameElementsAs Seq(("apple", 3), ("pineapple", 3))
   }
 
   test("space saving merge") {
-    val sketch1 = new SpaceSavingBinaryTreeSketch(2, 5)
+    val sketch1 = createSketch()
     sketch1.update("apple")
     sketch1.update("apple")
     sketch1.update("apple")
@@ -52,7 +55,7 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
     sketch1.update("orange")
     sketch1.update("banana")
 
-    val sketch2 = new SpaceSavingBinaryTreeSketch(2, 5)
+    val sketch2 = createSketch()
     sketch1.update("apple")
     sketch1.update("apple")
     sketch2.update("grape")
@@ -61,10 +64,11 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
 
     sketch1.merge(sketch2)
     logInfo(s"Sketch: $sketch1")
+    sketch1.getTopK should contain theSameElementsAs Seq(("apple", 5), ("orange", 2))
   }
 
   test("space saving serialize and deserialize") {
-    val sketch1 = new SpaceSavingBinaryTreeSketch(2, 5)
+    val sketch1 = createSketch()
     sketch1.update("apple")
     sketch1.update("apple")
     sketch1.update("apple")
@@ -74,5 +78,12 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
 
     val sketch2 = sketch1.deserialize(sketch1.serialize())
     logInfo(s"Sketch: $sketch2")
+    sketch2.getTopK shouldBe sketch1.getTopK
+  }
+
+  private def createSketch(): TopKSketch[String] = {
+    new SpaceSavingBinaryTreeSketch(2, 5)
+    // new ParallelSpaceSavingSketch(2, 5)
+    // new SpaceSavingSketch(2, 5)
   }
 }

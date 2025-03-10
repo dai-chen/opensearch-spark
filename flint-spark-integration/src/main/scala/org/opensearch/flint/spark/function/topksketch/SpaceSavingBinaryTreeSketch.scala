@@ -82,10 +82,12 @@ class SpaceSavingBinaryTreeSketch(k: Int, tracked: Int)
   override def merge(other: TopKSketch[String]): Unit = {
     other match {
       case ssAdapter: SpaceSavingBinaryTreeSketch =>
-        ssAdapter.elementCounts.foreach { case (item, count) =>
-          update(item, count)
-        }
-
+        ssAdapter.countToItems.toSeq.reverse // merge high frequent item first
+          .flatMap { case (count, items) =>
+            items.map(item => (item, count))
+          }.foreach { case (item, count) =>
+            update(item, count)
+          }
       case _ => throw new IllegalArgumentException("Cannot merge with incompatible sketch")
     }
   }

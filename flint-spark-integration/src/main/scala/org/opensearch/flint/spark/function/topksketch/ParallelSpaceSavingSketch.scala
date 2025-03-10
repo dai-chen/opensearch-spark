@@ -274,4 +274,13 @@ class ParallelSpaceSavingSketch(k: Int, tracked: Int)
       bis.close()
     }
   }
+
+  override def toString: String =
+    s"""
+      | k = $k, tracked = $tracked
+      | counterMap = $counterMap
+      | alphaMap = ${alphaMap.mkString("Array(", ", ", ")")}
+      | counterList = $counterList
+      | removedKeys = $removedKeys
+      |""".stripMargin
 }
