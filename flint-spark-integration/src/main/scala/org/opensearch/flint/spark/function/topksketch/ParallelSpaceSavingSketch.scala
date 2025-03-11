@@ -198,8 +198,8 @@ class ParallelSpaceSavingSketch(k: Int, tracked: Int)
     }
   }
 
-  override def getTopK: Seq[(String, Long)] = {
-    counterList.take(k).map { case (item, counter) => (item, counter.count) }
+  override def getTopK: Seq[(String, Long, Long)] = {
+    counterList.take(k).map { case (item, counter) => (item, counter.count, counter.error) }
   }
 
   override def serialize(): Array[Byte] = {

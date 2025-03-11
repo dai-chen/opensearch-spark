@@ -71,9 +71,17 @@ class SpaceSavingBinaryHeapSketch(k: Int, tracked: Int)
     }
   }
 
-  override def getTopK: Seq[(String, Long)] = {
+  override def getTopK: Seq[(String, Long, Long)] = {
     // Create a snapshot of the heap without modifying it
-    minHeap.iterator().asScala.toSeq.sortBy(-_._2).take(k)
+    minHeap
+      .iterator()
+      .asScala
+      .toSeq
+      .map { case (item, cnt) =>
+        (item, cnt, 0L)
+      }
+      .sortBy(-_._2)
+      .take(k)
   }
 
   override def serialize(): Array[Byte] = {

@@ -64,9 +64,15 @@ class CountMinSketch(k: Int, width: Int = 8192, depth: Int = 10, seed: Int = 42)
     }
   }
 
-  override def getTopK: Seq[(String, Long)] = {
+  override def getTopK: Seq[(String, Long, Long)] = {
     // Return Top K items sorted by count descending
-    topKHeap.clone().dequeueAll.sortBy(-_._2)
+    topKHeap
+      .clone()
+      .dequeueAll
+      .map { case (item, cnt) =>
+        (item, cnt, 0L)
+      }
+      .sortBy(-_._2)
   }
 
   override def serialize(): Array[Byte] = {

@@ -28,10 +28,10 @@ class MisraGriesSketch(k: Int, tracked: Int) extends TopKSketch[String] {
     }
   }
 
-  override def getTopK: Seq[(String, Long)] = {
+  override def getTopK: Seq[(String, Long, Long)] = {
     sketch
       .getFrequentItems(ErrorType.NO_FALSE_POSITIVES)
-      .map(item => (item.getItem, item.getEstimate))
+      .map(item => (item.getItem, item.getEstimate, 0L))
       .toSeq
       .sortBy(-_._2) // Sort by frequency descending
       .take(k) // Limit to top K results

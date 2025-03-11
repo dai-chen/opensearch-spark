@@ -20,7 +20,7 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
     sketch.update("apple")
     logInfo(s"TopK: ${sketch.getTopK}")
     logInfo(s"Internal: $sketch")
-    sketch.getTopK shouldBe Seq(("apple", 3))
+    sketch.getTopK shouldBe Seq(("apple", 3, 0))
 
     sketch.update("orange")
     sketch.update("orange")
@@ -29,7 +29,7 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
     sketch.update("grape")
     logInfo(s"TopK: ${sketch.getTopK}")
     logInfo(s"Internal: $sketch")
-    sketch.getTopK shouldBe Seq(("apple", 3), ("orange", 2))
+    sketch.getTopK shouldBe Seq(("apple", 3, 0), ("orange", 2, 0))
 
     // Full and swap
     sketch.update("pineapple")
@@ -43,7 +43,7 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
     sketch.update("pineapple")
     logInfo(s"TopK: ${sketch.getTopK}")
     logInfo(s"Internal: $sketch")
-    sketch.getTopK should contain theSameElementsAs Seq(("apple", 3), ("pineapple", 3))
+    sketch.getTopK should contain theSameElementsAs Seq(("apple", 3, 0), ("pineapple", 3, 1))
   }
 
   test("space saving merge") {
@@ -64,7 +64,7 @@ class SpaceSavingBinaryTreeSketchSuite extends FlintSuite with Matchers {
 
     sketch1.merge(sketch2)
     logInfo(s"Sketch: $sketch1")
-    sketch1.getTopK should contain theSameElementsAs Seq(("apple", 5), ("orange", 2))
+    sketch1.getTopK should contain theSameElementsAs Seq(("apple", 5, 0), ("orange", 2, 0))
   }
 
   test("space saving serialize and deserialize") {

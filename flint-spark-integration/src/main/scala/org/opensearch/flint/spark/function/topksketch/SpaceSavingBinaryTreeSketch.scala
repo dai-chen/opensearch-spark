@@ -93,11 +93,11 @@ class SpaceSavingBinaryTreeSketch(k: Int, tracked: Int)
     }
   }
 
-  override def getTopK: Seq[(String, Long)] = {
+  override def getTopK: Seq[(String, Long, Long)] = {
     // Use TreeMap's reverse ordering to get top K efficiently
     countToItems.toSeq.reverse // Reverse to get highest counts first
       .flatMap { case (count, items) =>
-        items.map(item => (item, count))
+        items.map(item => (item, count, 0L))
       }
       .take(k)
   }

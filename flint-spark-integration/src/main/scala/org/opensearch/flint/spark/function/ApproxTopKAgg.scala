@@ -34,7 +34,11 @@ case class ApproxTopKAgg(
 
   // Dynamically infer the data type based on the child's data type
   override def dataType: DataType = ArrayType(
-    StructType(Seq(StructField("value", child.dataType), StructField("count", LongType))))
+    StructType(
+      Seq(
+        StructField("value", child.dataType),
+        StructField("count", LongType),
+        StructField("error", LongType))))
 
   override def children: Seq[Expression] = Seq(child)
 
@@ -58,13 +62,14 @@ case class ApproxTopKAgg(
   }
 
   override def eval(buffer: TopKSketch[String]): Any = {
-    val topKItems = buffer.getTopK.map { case (item, count) =>
-      val row = new GenericInternalRow(2)
+    val topKItems = buffer.getTopK.map { case (item, count, error) =>
+      val row = new GenericInternalRow(3)
 
       // Convert item back to the appropriate type
       val convertedValue = convertToDataType(item, child.dataType)
       row.update(0, convertedValue)
       row.update(1, count)
+      row.update(2, error)
       row
     }
 

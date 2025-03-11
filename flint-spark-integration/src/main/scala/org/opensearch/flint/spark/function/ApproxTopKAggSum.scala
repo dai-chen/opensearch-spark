@@ -33,7 +33,8 @@ case class ApproxTopKAggSum(
     StructType(
       Seq(
         StructField("value", keyExpr.dataType, nullable = false),
-        StructField("sum", LongType, nullable = false)
+        StructField("sum", LongType, nullable = false),
+        StructField("error", LongType, nullable = false)
       )
     )
   ) // <--- Changed this line only
@@ -61,10 +62,11 @@ case class ApproxTopKAggSum(
   }
 
   override def eval(buffer: TopKSketch[String]): Any = {
-    val resultArray = buffer.getTopK.map { case (key, sum) =>
-      val row = new GenericInternalRow(2)
+    val resultArray = buffer.getTopK.map { case (key, sum, error) =>
+      val row = new GenericInternalRow(3)
       row.update(0, convertToDataType(key, keyExpr.dataType))
       row.update(1, sum) // sum is now Long
+      row.update(2, error)
       row
     }
     ArrayData.toArrayData(resultArray)

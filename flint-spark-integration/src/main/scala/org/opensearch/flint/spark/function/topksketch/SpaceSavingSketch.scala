@@ -79,10 +79,11 @@ class SpaceSavingSketch(k: Int, tracked: Int) extends TopKSketch[String] with Se
     }
   }
 
-  override def getTopK: Seq[(String, Long)] = {
-    elementCounts.toSeq.sortBy(-_._2.frequency).take(k).map { case (item, counter) =>
-      (item, counter.frequency)
-    }
+  override def getTopK: Seq[(String, Long, Long)] = {
+    elementCounts.toSeq
+      .sortBy(-_._2.frequency)
+      .take(k)
+      .map { case (item, counter) => (item, counter.frequency, counter.error) }
   }
 
   override def serialize(): Array[Byte] = {

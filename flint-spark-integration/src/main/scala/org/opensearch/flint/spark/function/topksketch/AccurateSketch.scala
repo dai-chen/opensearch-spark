@@ -40,7 +40,7 @@ class AccurateSketch[T](k: Int) extends TopKSketch[T] with Serializable {
     }
   }
 
-  override def getTopK: Seq[(T, Long)] = {
+  override def getTopK: Seq[(T, Long, Long)] = {
     // Rebuild the heap with the latest counts
     val minHeap = mutable.PriorityQueue.empty[(T, Long)](Ordering.by(-_._2)) // Min-heap on count
 
@@ -56,7 +56,11 @@ class AccurateSketch[T](k: Int) extends TopKSketch[T] with Serializable {
     }
 
     // Convert heap to descending order (top-K highest first)
-    minHeap.toSeq.sortBy(-_._2)
+    minHeap.toSeq
+      .map { case (item, cnt) =>
+        (item, cnt, 0L)
+      }
+      .sortBy(-_._2)
   }
 
   override def serialize(): Array[Byte] = {

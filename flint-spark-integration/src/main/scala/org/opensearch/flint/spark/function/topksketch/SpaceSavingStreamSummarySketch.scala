@@ -58,8 +58,11 @@ class SpaceSavingStreamSummarySketch(k: Int, tracked: Int)
   }
 
   /** Retrieve the Top-K elements */
-  override def getTopK: Seq[(String, Long)] = {
-    streamSummary.getTopK(k).asScala.map(counter => (counter.getItem, counter.getValue))
+  override def getTopK: Seq[(String, Long, Long)] = {
+    streamSummary
+      .getTopK(k)
+      .asScala
+      .map(counter => (counter.getItem, counter.getValue, counter.getError))
   }
 
   /** Serialize the sketch */

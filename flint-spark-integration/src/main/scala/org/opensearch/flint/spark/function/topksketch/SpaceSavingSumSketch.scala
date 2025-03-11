@@ -50,8 +50,13 @@ class SpaceSavingSumSketch(k: Int, tracked: Int) extends TopKSketch[String] {
     }
   }
 
-  def getTopK: Seq[(String, Long)] =
-    elementSums.toSeq.sortBy(-_._2).take(k) // <--- Return type Long
+  def getTopK: Seq[(String, Long, Long)] =
+    elementSums.toSeq
+      .map { case (item, cnt) =>
+        (item, cnt, 0L)
+      }
+      .sortBy(-_._2)
+      .take(k) // <--- Return type Long
 
   def serialize(): Array[Byte] = {
     val sumsString = elementSums

@@ -18,7 +18,7 @@ trait TopKSketch[T] {
   def merge(other: TopKSketch[T]): Unit
 
   /** Retrieves the Top K items and their estimated counts */
-  def getTopK: Seq[(T, Long)]
+  def getTopK: Seq[(T, Long, Long)]
 
   /** Serializes the sketch to a byte array */
   def serialize(): Array[Byte]

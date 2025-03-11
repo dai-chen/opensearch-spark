@@ -50,6 +50,11 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
         "approx_top_count_space_saving_binary_tree",
         (k, tracked) => new SpaceSavingBinaryTreeSketch(k, tracked)))
 
+    extensions.injectFunction(
+      ApproxTopKFunction(
+        "approx_top_count_space_saving_hashmap_error",
+        (k, tracked) => new SpaceSavingSketch(k, tracked)))
+
     // Approximate top sum functions
     extensions.injectFunction(
       ApproxTopSumFunction(
