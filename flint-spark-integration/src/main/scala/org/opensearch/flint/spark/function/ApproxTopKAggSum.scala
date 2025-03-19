@@ -49,7 +49,7 @@ case class ApproxTopKAggSum(
     val weight = weightExpr.eval(inputRow)
     if (key != null && weight != null) {
       val weightValue = weight.asInstanceOf[Number].longValue() // Changed to Long
-      buffer.update(key.toString, weightValue)
+      buffer.update(convertToString(key), weightValue)
     }
     buffer
   }
@@ -71,6 +71,15 @@ case class ApproxTopKAggSum(
     }
     ArrayData.toArrayData(resultArray)
   }
+
+  private def convertToString(key: Any): String =
+    keyExpr.dataType match {
+      case StructType(_) =>
+        val keyStr = key.toString
+        // Remove brackets around
+        keyStr.substring(1, keyStr.length - 1)
+      case _ => key.toString
+    }
 
   // No change in convertToDataType
   private def convertToDataType(item: String, targetType: DataType): Any = targetType match {

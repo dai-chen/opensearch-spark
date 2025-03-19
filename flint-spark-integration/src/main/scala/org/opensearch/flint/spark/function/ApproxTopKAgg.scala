@@ -49,7 +49,7 @@ case class ApproxTopKAgg(
   override def update(buffer: TopKSketch[String], inputRow: InternalRow): TopKSketch[String] = {
     val value = child.eval(inputRow)
     if (value != null) {
-      buffer.update(value.toString)
+      buffer.update(convertToString(value))
     }
     buffer
   }
@@ -76,6 +76,15 @@ case class ApproxTopKAgg(
     // Return as GenericArrayData
     new GenericArrayData(topKItems.toArray)
   }
+
+  private def convertToString(key: Any): String =
+    child.dataType match {
+      case StructType(_) =>
+        val keyStr = key.toString
+        // Remove brackets around
+        keyStr.substring(1, keyStr.length - 1)
+      case _ => key.toString
+    }
 
   private def convertToDataType(item: String, targetType: DataType): Any = targetType match {
     case StringType => UTF8String.fromString(item)

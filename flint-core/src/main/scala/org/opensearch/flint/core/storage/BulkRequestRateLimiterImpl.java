@@ -52,11 +52,14 @@ public class BulkRequestRateLimiterImpl implements BulkRequestRateLimiter {
    */
   @Override
   public void increaseRate() {
+    /*
     if (isEstimatedCurrentRateCloseToLimit()) {
       setRate(getRate() + increaseStep);
     } else {
       LOG.info("Rate increase was blocked.");
     }
+     */
+    setRate(getRate() + increaseStep);
     LOG.info("Current rate limit for bulk request is " + getRate() + " documents/sec");
   }
 

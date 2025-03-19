@@ -29,6 +29,17 @@ class FlintSparkApproxTopKSqlITSuite extends FlintSparkSuite {
     sql(s"DROP TABLE $testTable")
   }
 
+  test(s"approx top sum by xxx") {
+    sql(s"""
+         | SELECT
+         |   window.start,
+         |   approx_top_count_space_saving_hashmap(struct(productId, customerId), 5, 10),
+         |   approx_top_sum_space_saving_hashmap(struct(productId, customerId), productsAmount, 5, 10)
+         | FROM $testTable
+         | GROUP BY TUMBLE(transactionDate, '1 week')
+         |""".stripMargin).show(false)
+  }
+
   Seq(
     "approx_top_count_space_saving_hashmap",
     "approx_top_count_space_saving_stream_summary",

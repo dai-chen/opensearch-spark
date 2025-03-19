@@ -72,18 +72,36 @@ public class OpenSearchBulkWrapper {
           .get(() -> {
             requestCount.incrementAndGet();
             rateLimiter.acquirePermit(nextRequest.get().requests().size());
-            BulkResponse response = client.bulk(nextRequest.get(), options);
 
-            if (!bulkItemRetryableResultPredicate.test(response)) {
-              rateLimiter.increaseRate();
-            } else {
-              LOG.info("Bulk request failed. attempt = " + (requestCount.get() - 1));
-              rateLimiter.decreaseRate();
-              if (retryPolicy.getConfig().allowsRetries()) {
-                nextRequest.set(getRetryableRequest(nextRequest.get(), response));
+            try {
+              long start = System.currentTimeMillis();
+              BulkResponse response = client.bulk(nextRequest.get(), options);
+              long latency = System.currentTimeMillis() - start;
+
+              if (!bulkItemRetryableResultPredicate.test(response)) {
+                if (latency > 25 * 1000) {
+                  LOG.warning("Bulk latency very high. Decreasing rate. Latency = " + latency);
+                  rateLimiter.setRate((long) (rateLimiter.getRate() * 0.6));
+                //} else if (latency > 25 * 1000) {
+                // LOG.warning("Bulk latency high. Freezing rate. Latency = " + latency);
+                } else {
+                  rateLimiter.increaseRate();
+                }
+              } else {
+                LOG.info("Bulk request failed. Decreasing rate slightly. Attempt = " + (requestCount.get() - 1));
+                rateLimiter.setRate((long) (rateLimiter.getRate() * 0.8));
+                if (retryPolicy.getConfig().allowsRetries()) {
+                  nextRequest.set(getRetryableRequest(nextRequest.get(), response));
+                }
               }
+              return response;
+            } catch (Exception e) {
+              if (isTimeoutException(e)) {
+                LOG.warning("Critical failure: socket/connection timeout. Decreasing rate aggressively.");
+                rateLimiter.setRate((long) (rateLimiter.getRate() * 0.4));
+              }
+              throw e; // let Failsafe retry policy decide
             }
-            return response;
           });
       return res;
     } catch (FailsafeException ex) {
@@ -95,6 +113,13 @@ public class OpenSearchBulkWrapper {
       MetricsUtil.addHistoricGauge(MetricConstants.OPENSEARCH_BULK_SIZE_METRIC, bulkRequest.estimatedSizeInBytes());
       MetricsUtil.addHistoricGauge(MetricConstants.OPENSEARCH_BULK_RETRY_COUNT_METRIC, requestCount.get() - 1);
     }
+  }
+
+  private boolean isTimeoutException(Exception e) {
+    return e instanceof java.net.SocketTimeoutException ||
+            e instanceof java.net.ConnectException ||
+            e.getCause() instanceof java.net.SocketTimeoutException ||
+            e.getCause() instanceof java.net.ConnectException;
   }
 
   private BulkRequest getRetryableRequest(BulkRequest request, BulkResponse response) {
