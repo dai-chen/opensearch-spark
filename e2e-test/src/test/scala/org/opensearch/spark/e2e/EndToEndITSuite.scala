@@ -381,6 +381,35 @@ class EndToEndITSuite extends AnyFlatSpec with TableDrivenPropertyChecks with Be
     }
   }
 
+  it should "Sync PPL Queries" in {
+    var sessionId : String = null
+    val backend = HttpClientSyncBackend()
+
+    val queriesDir = new File("e2e-test/src/test/resources/opensearch/queries/ppl")
+    val queriesTableData : ListBuffer[(String, String)] = new ListBuffer()
+
+    queriesDir.listFiles((_, name) => name.endsWith(".ppl")).foreach(f => {
+      val querySource = fromFile(f)
+      val query = querySource.mkString
+      querySource.close()
+
+      val baseName = f.getName.substring(0, f.getName.length - 4)
+      queriesTableData += ((query, baseName))
+    })
+
+    forEvery(Table(("Query", "Base Filename"), queriesTableData: _*)) { (query: String, baseName: String) =>
+      logInfo(s">>> Testing query [$baseName]: $query")
+      val queryResponse = executeSyncQuery("ppl", query, backend)
+      val expectedResults = Json.parse(new FileInputStream(new File(queriesDir, baseName + ".results")))
+
+      // scalastyle:off println
+      println(s"Sync PPL query response: $queryResponse")
+      // scalastyle:on println
+
+      // assert(expectedResults == actualResults)
+    }
+  }
+
   /**
    * Retrieves the results from S3 of a query submitted using Spark Connect. The results are saved in S3 in CSV
    * format.
@@ -414,6 +443,24 @@ class EndToEndITSuite extends AnyFlatSpec with TableDrivenPropertyChecks with Be
     }
 
     throw new Exception("Object not found")
+  }
+
+  def executeSyncQuery(language: String, query: String, backend: SttpBackend[Identity, Any]) : JsValue = {
+    val escapedQuery = query.replaceAll("\n", "\\\\n").replace("mys3.default.", "")
+    val queryBody = s"""{"query": "$escapedQuery"}"""
+
+    val response = basicRequest
+      .post(uri"$OPENSEARCH_URL/_plugins/_$language")
+      .auth.basic(OPENSEARCH_USERNAME, OPENSEARCH_PASSWORD)
+      .contentType("application/json")
+      .body(queryBody, "UTF-8")
+      .response(asJson[JsValue])
+      .send(backend)
+
+    response.body match {
+      case Right(jsValue) => jsValue
+      case Left(error) => throw new RuntimeException(s"Query execution failed: ${error.getMessage}")
+    }
   }
 
   /**
