@@ -1,7 +1,7 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM opensearchproject/opensearch:latest
+FROM opensearchproject/opensearch:3.0.0-alpha1
 
 USER root
 
