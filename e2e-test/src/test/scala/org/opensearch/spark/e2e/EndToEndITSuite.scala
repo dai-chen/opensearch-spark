@@ -15,6 +15,7 @@ import scala.io.Source.fromFile
 
 import org.scalatest.{Assertions, BeforeAndAfterAll, Suite}
 import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.prop.TableDrivenPropertyChecks
 import play.api.libs.json.{JsError, Json, JsValue}
 import sttp.client3.{basicRequest, HttpClientSyncBackend, Identity, Response, ResponseException, SttpBackend, UriContext}
@@ -93,7 +94,7 @@ class EndToEndITSuite extends AnyFlatSpec with TableDrivenPropertyChecks with Be
     }
 
     if (dockerProcess.exitValue() != 0) {
-      logError("Unable to start docker cluster")
+      logError(s"Unable to start docker cluster: ${dockerProcess.exitValue()}")
     }
 
     logInfo("Started docker cluster")
@@ -381,34 +382,33 @@ class EndToEndITSuite extends AnyFlatSpec with TableDrivenPropertyChecks with Be
     }
   }
 
-  it should "Sync PPL Queries" in {
-    var sessionId : String = null
-    val backend = HttpClientSyncBackend()
+  new File("e2e-test/src/test/resources/opensearch/queries/ppl")
+    .listFiles((_, name) => name.endsWith(".ppl"))
+    .foreach { file =>
+      val baseName = file.getName.stripSuffix(".ppl")
+      val query = {
+        val src = fromFile(file)
+        try src.mkString finally src.close()
+      }
 
-    val queriesDir = new File("e2e-test/src/test/resources/opensearch/queries/ppl")
-    val queriesTableData : ListBuffer[(String, String)] = new ListBuffer()
+      val expectedResultFile = new File(new File("e2e-test/src/test/resources/opensearch/queries/ppl"), s"$baseName.results")
 
-    queriesDir.listFiles((_, name) => name.endsWith(".ppl")).foreach(f => {
-      val querySource = fromFile(f)
-      val query = querySource.mkString
-      querySource.close()
+      // Each test will show up in test reports individually
+      val backend = HttpClientSyncBackend()
+      it should s"execute PPL query: [$baseName]" in {
+        logInfo(s">>> Testing query [$baseName]: $query")
 
-      val baseName = f.getName.substring(0, f.getName.length - 4)
-      queriesTableData += ((query, baseName))
-    })
+        val queryResponse = executeSyncQuery("ppl", query, backend)
+        val expectedResults = Json.parse(new FileInputStream(expectedResultFile))
 
-    forEvery(Table(("Query", "Base Filename"), queriesTableData: _*)) { (query: String, baseName: String) =>
-      logInfo(s">>> Testing query [$baseName]: $query")
-      val queryResponse = executeSyncQuery("ppl", query, backend)
-      val expectedResults = Json.parse(new FileInputStream(new File(queriesDir, baseName + ".results")))
+        // scalastyle:off println
+        println(s"Sync PPL query response: $queryResponse")
+        // scalastyle:on println
 
-      // scalastyle:off println
-      println(s"Sync PPL query response: $queryResponse")
-      // scalastyle:on println
-
-      // assert(expectedResults == actualResults)
+        // Add your assertion here
+        // assert(queryResponse == expectedResults)
+      }
     }
-  }
 
   /**
    * Retrieves the results from S3 of a query submitted using Spark Connect. The results are saved in S3 in CSV
