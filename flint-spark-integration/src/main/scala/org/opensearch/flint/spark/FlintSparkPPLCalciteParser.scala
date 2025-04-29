@@ -28,10 +28,8 @@
 package org.opensearch.flint.spark
 
 import java.util.List
-
 import scala.collection.JavaConverters._
 import scala.collection.JavaConverters.mapAsJavaMapConverter
-
 import org.apache.calcite.jdbc.CalciteSchema
 import org.apache.calcite.plan.{RelTrait, RelTraitDef}
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField}
@@ -44,14 +42,13 @@ import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.tools.{Frameworks, Programs}
+import org.apache.spark.internal.Logging
 import org.opensearch.sql.ast.statement.{Query, Statement}
 import org.opensearch.sql.calcite.{CalcitePlanContext, CalciteRelNodeVisitor}
 import org.opensearch.sql.common.antlr.SyntaxCheckException
 import org.opensearch.sql.executor.{OpenSearchTypeSystem, QueryType}
 import org.opensearch.sql.ppl.antlr.PPLSyntaxParser
 import org.opensearch.sql.ppl.parser.{AstBuilder, AstStatementBuilder}
-import org.opensearch.sql.ppl.parser.AstStatementBuilder.StatementBuilderContext.StatementBuilderContextBuilder
-
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -67,29 +64,31 @@ import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, ByteType,
  *   Spark SQL parser
  */
 class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInterface)
-    extends ParserInterface {
+    extends ParserInterface
+      with Logging {
 
   private val pplParser = new PPLSyntaxParser()
 
-  override def parsePlan(sqlText: String): LogicalPlan = {
+  override def parsePlan(pplText: String): LogicalPlan = {
     try {
       // Parse to AST
-      val cst = pplParser.parse(sqlText)
+      val cst = pplParser.parse(pplText)
       val statement =
         cst.accept(
           new AstStatementBuilder(
-            new AstBuilder(sqlText),
+            new AstBuilder(pplText),
             AstStatementBuilder.StatementBuilderContext.builder
               .isExplain(false)
               .format("jdbc")
               .build))
       val ast = statement.asInstanceOf[Query].getPlan
 
-      // Analyze by Calcite
-      val rootSchema = CalciteSchema.createRootSchema(true, false).plus()
-      // register your catalog-backed schema:
-      rootSchema.add("default", new SparkSchema(spark))
+      // Register Spark catalog to Calcite schema
+      val rootSchema = CalciteSchema.createRootSchema(true, false).plus()   // SchemaPlus
+      val sparkCatalog = rootSchema.add("spark_catalog", new AbstractSchema())
+      sparkCatalog.add("default", new SparkSchema(spark))
 
+      // Analyze by Calcite
       val config =
         Frameworks.newConfigBuilder
           .parserConfig(SqlParser.Config.DEFAULT)
@@ -106,12 +105,18 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
       val converter = new RelToSqlConverter(SparkSqlDialect.DEFAULT)
       val result = converter.visitRoot(relNode)
       val sqlNode = result.asStatement
-      val sql = sqlNode.toSqlString(SparkSqlDialect.DEFAULT).getSql
+      val sqlText = sqlNode.toSqlString(SparkSqlDialect.DEFAULT).getSql
+      logInfo(
+        s"""
+          | PPL => SparkSQL
+          |   PPL query: $pplText
+          |   SQL query: $sqlText
+          |""".stripMargin)
 
-      sparkParser.parsePlan(sql)
+      sparkParser.parsePlan(sqlText)
     } catch {
       // Fall back to Spark parse plan logic if flint cannot parse
-      case _: ParseException | _: SyntaxCheckException => sparkParser.parsePlan(sqlText)
+      case _: ParseException | _: SyntaxCheckException => sparkParser.parsePlan(pplText)
     }
   }
 
