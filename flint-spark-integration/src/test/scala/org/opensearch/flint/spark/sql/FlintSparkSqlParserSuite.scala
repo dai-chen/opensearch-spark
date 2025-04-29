@@ -32,4 +32,10 @@ class FlintSparkSqlParserSuite extends FlintSuite with Matchers {
           |""".stripMargin)
     } should have message "Filtering condition is not supported: WHERE status != 404"
   }
+
+  test("ppl calcite") {
+    sql("""
+        | source = alb_logs
+        |""".stripMargin)
+  }
 }

@@ -19,6 +19,9 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) {
     extensions.injectParser { (spark, parser) =>
       new FlintSparkSqlParser(parser)
     }
+    extensions.injectParser { (spark, parser) =>
+      new FlintSparkPPLCalciteParser(spark, parser)
+    }
 
     extensions.injectFunction(TumbleFunction.description)
 

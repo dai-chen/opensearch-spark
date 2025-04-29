@@ -15,8 +15,8 @@ import org.apache.spark.sql.SparkSessionExtensions
 class FlintPPLSparkExtensions extends (SparkSessionExtensions => Unit) {
 
   override def apply(extensions: SparkSessionExtensions): Unit = {
-    extensions.injectParser { (spark, parser) =>
+    /*extensions.injectParser { (spark, parser) =>
       new FlintSparkPPLParser(parser, spark)
-    }
+    }*/
   }
 }

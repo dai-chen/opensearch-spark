@@ -4,7 +4,7 @@
  */
 import Dependencies.*
 
-lazy val scala212 = "2.12.14"
+lazy val scala212 = "2.12.18"
 lazy val sparkVersion = "3.5.1"
 // Spark jackson version. Spark jackson-module-scala strictly check the jackson-databind version should compatible
 // https://github.com/FasterXML/jackson-module-scala/blob/2.18/src/main/scala/com/fasterxml/jackson/module/scala/JacksonModule.scala#L59
@@ -234,6 +234,9 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
       "com.stephenn" %% "scalatest-json-jsonassert" % "0.2.5" % "test",
       "com.github.sbt" % "junit-interface" % "0.13.3" % "test"),
     libraryDependencies ++= deps(sparkVersion),
+
+    unmanagedJars in Compile += baseDirectory.value / "lib" / "all-in-one-jar-3.0.0.0-beta1-SNAPSHOT.jar",
+
     // ANTLR settings
     Antlr4 / antlr4Version := "4.8",
     Antlr4 / antlr4PackageName := Some("org.opensearch.flint.spark.sql"),
