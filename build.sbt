@@ -234,9 +234,7 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
       "com.stephenn" %% "scalatest-json-jsonassert" % "0.2.5" % "test",
       "com.github.sbt" % "junit-interface" % "0.13.3" % "test"),
     libraryDependencies ++= deps(sparkVersion),
-
     unmanagedJars in Compile += baseDirectory.value / "lib" / "all-in-one-jar-3.0.0.0-beta1-SNAPSHOT.jar",
-
     // ANTLR settings
     Antlr4 / antlr4Version := "4.8",
     Antlr4 / antlr4PackageName := Some("org.opensearch.flint.spark.sql"),

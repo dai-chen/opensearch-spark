@@ -6,8 +6,8 @@
 package org.opensearch.sql.common.utils;
 
 import static org.junit.Assert.assertEquals;
-import static org.opensearch.sql.common.utils.StringUtils.unquoteIdentifier;
-import static org.opensearch.sql.common.utils.StringUtils.unquoteText;
+import static org.opensearch.flintsql.common.utils.StringUtils.unquoteIdentifier;
+import static org.opensearch.flintsql.common.utils.StringUtils.unquoteText;
 
 import org.junit.Test;
 

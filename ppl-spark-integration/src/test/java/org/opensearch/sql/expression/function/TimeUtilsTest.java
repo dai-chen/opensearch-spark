@@ -11,6 +11,7 @@ import static org.junit.Assert.assertThrows;
 import java.time.ZonedDateTime;
 
 import org.junit.Test;
+import org.opensearch.flintsql.expression.function.TimeUtils;
 
 public class TimeUtilsTest {
 

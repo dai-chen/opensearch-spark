@@ -6,11 +6,8 @@ package org.opensearch.sql.expression.function;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.opensearch.flintsql.expression.function.SerializableUdf;
 
-import java.util.Arrays;
-import java.util.Collections;
-
-import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 

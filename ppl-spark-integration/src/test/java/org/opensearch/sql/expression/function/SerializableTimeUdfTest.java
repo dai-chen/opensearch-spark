@@ -6,6 +6,7 @@
 package org.opensearch.sql.expression.function;
 
 import org.junit.Test;
+import org.opensearch.flintsql.expression.function.SerializableUdf;
 
 import java.sql.Timestamp;
 import java.time.Instant;
