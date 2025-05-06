@@ -27,29 +27,38 @@
 
 package org.opensearch.flint.spark
 
-import java.util.List
+import java.util.{Collections, List}
+
 import scala.collection.JavaConverters._
 import scala.collection.JavaConverters.mapAsJavaMapConverter
+
+import org.apache.calcite.adapter.enumerable.EnumerableConvention
+import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.CalciteSchema
-import org.apache.calcite.plan.{RelTrait, RelTraitDef}
+import org.apache.calcite.plan.{RelOptCluster, RelOptTable, RelTrait, RelTraitDef}
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField}
 import org.apache.calcite.rel.`type`.RelDataTypeFieldImpl
+import org.apache.calcite.rel.{RelHomogeneousShuttle, RelNode, RelShuttle}
+import org.apache.calcite.rel.core.TableScan
+import org.apache.calcite.rel.logical.LogicalTableScan
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider
 import org.apache.calcite.rel.rel2sql.RelToSqlConverter
-import org.apache.calcite.schema.Table
+import org.apache.calcite.schema.{Table, TranslatableTable}
 import org.apache.calcite.schema.impl.{AbstractSchema, AbstractTable}
 import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.tools.{Frameworks, Programs}
-import org.apache.spark.internal.Logging
 import org.opensearch.sql.ast.statement.{Query, Statement}
 import org.opensearch.sql.calcite.{CalcitePlanContext, CalciteRelNodeVisitor}
 import org.opensearch.sql.common.antlr.SyntaxCheckException
 import org.opensearch.sql.executor.{OpenSearchTypeSystem, QueryType}
 import org.opensearch.sql.ppl.antlr.PPLSyntaxParser
 import org.opensearch.sql.ppl.parser.{AstBuilder, AstStatementBuilder}
+
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalog.Database
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser._
@@ -65,7 +74,7 @@ import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, ByteType,
  */
 class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInterface)
     extends ParserInterface
-      with Logging {
+    with Logging {
 
   private val pplParser = new PPLSyntaxParser()
 
@@ -83,10 +92,12 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
               .build))
       val ast = statement.asInstanceOf[Query].getPlan
 
-      // Register Spark catalog to Calcite schema
-      val rootSchema = CalciteSchema.createRootSchema(true, false).plus()   // SchemaPlus
-      val sparkCatalog = rootSchema.add("spark_catalog", new AbstractSchema())
-      sparkCatalog.add("default", new SparkSchema(spark))
+      // Register each Spark catalog to Calcite schema
+      val rootSchema = CalciteSchema.createRootSchema(true, false).plus() // SchemaPlus
+      spark.catalog.listDatabases().collect().foreach { db =>
+        val sparkCatalog = rootSchema.add(db.catalog, new AbstractSchema())
+        sparkCatalog.add(db.name, new SparkSchema(spark))
+      }
 
       // Analyze by Calcite
       val config =
@@ -106,12 +117,25 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
       val result = converter.visitRoot(relNode)
       val sqlNode = result.asStatement
       val sqlText = sqlNode.toSqlString(SparkSqlDialect.DEFAULT).getSql
-      logInfo(
-        s"""
+      logInfo(s"""
           | PPL => SparkSQL
           |   PPL query: $pplText
           |   SQL query: $sqlText
           |""".stripMargin)
+
+      val shuttle = new RelHomogeneousShuttle() {
+        override def visit(scan: TableScan): RelNode = {
+          val table = scan.getTable
+          if (scan.isInstanceOf[LogicalTableScan] && Bindables.BindableTableScan.canHandle(
+              table)) {
+            // Always replace the LogicalTableScan with BindableTableScan
+            // because it's implementation does not require a "schema" as context.
+            return Bindables.BindableTableScan.create(scan.getCluster, table)
+          }
+          super.visit(scan)
+        }
+      }
+      // val rel2 = relNode.accept(shuttle)
 
       sparkParser.parsePlan(sqlText)
     } catch {
