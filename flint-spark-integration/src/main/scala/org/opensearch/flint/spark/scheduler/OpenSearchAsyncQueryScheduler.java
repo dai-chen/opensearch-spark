@@ -26,7 +26,7 @@ import org.opensearch.client.RequestOptions;
 import org.opensearch.client.indices.CreateIndexRequest;
 import org.opensearch.client.indices.CreateIndexResponse;
 import org.opensearch.client.indices.GetIndexRequest;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.flint.common.scheduler.AsyncQueryScheduler;
 import org.opensearch.flint.common.scheduler.model.AsyncQuerySchedulerRequest;
@@ -36,7 +36,7 @@ import org.opensearch.flint.spark.scheduler.util.IntervalSchedulerParser;
 import org.opensearch.flint.core.storage.OpenSearchClientUtils;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
 import org.opensearch.jobscheduler.spi.schedule.Schedule;
-import org.opensearch.rest.RestStatus;
+import org.opensearch.core.rest.RestStatus;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -156,7 +156,7 @@ public class OpenSearchAsyncQueryScheduler implements AsyncQueryScheduler {
     private void ensureIndexExists(IRestHighLevelClient client) {
         try {
             if (!client.doesIndexExist(new GetIndexRequest(SCHEDULER_INDEX_NAME), RequestOptions.DEFAULT)) {
-                createAsyncQuerySchedulerIndex(client);
+                // createAsyncQuerySchedulerIndex(client);
             }
         } catch (Throwable e) {
             handleException("Failed to check/create index", SCHEDULER_INDEX_NAME, e);

@@ -27,43 +27,45 @@
 
 package org.opensearch.flint.spark
 
-import java.util.{Collections, List}
+import java.util
+import java.util.List
 
 import scala.collection.JavaConverters._
-import scala.collection.JavaConverters.mapAsJavaMapConverter
 
-import org.apache.calcite.adapter.enumerable.EnumerableConvention
 import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.CalciteSchema
-import org.apache.calcite.plan.{RelOptCluster, RelOptTable, RelTrait, RelTraitDef}
-import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField}
-import org.apache.calcite.rel.`type`.RelDataTypeFieldImpl
-import org.apache.calcite.rel.{RelHomogeneousShuttle, RelNode, RelShuttle}
+import org.apache.calcite.plan.{RelTrait, RelTraitDef}
+import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField, RelDataTypeFieldImpl}
+import org.apache.calcite.rel.{RelHomogeneousShuttle, RelNode}
 import org.apache.calcite.rel.core.TableScan
 import org.apache.calcite.rel.logical.LogicalTableScan
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider
 import org.apache.calcite.rel.rel2sql.RelToSqlConverter
-import org.apache.calcite.schema.{Table, TranslatableTable}
+import org.apache.calcite.schema.Table
 import org.apache.calcite.schema.impl.{AbstractSchema, AbstractTable}
 import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.tools.{Frameworks, Programs}
-import org.opensearch.sql.ast.statement.{Query, Statement}
+import org.opensearch.flint.core.storage.OpenSearchClientUtils
+import org.opensearch.sql.ast.expression.QualifiedName
+import org.opensearch.sql.ast.statement.Query
 import org.opensearch.sql.calcite.{CalcitePlanContext, CalciteRelNodeVisitor}
 import org.opensearch.sql.common.antlr.SyntaxCheckException
 import org.opensearch.sql.executor.{OpenSearchTypeSystem, QueryType}
+import org.opensearch.sql.opensearch.client.OpenSearchRestClient
+import org.opensearch.sql.opensearch.storage.OpenSearchStorageEngine
 import org.opensearch.sql.ppl.antlr.PPLSyntaxParser
 import org.opensearch.sql.ppl.parser.{AstBuilder, AstStatementBuilder}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalog.Database
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, StructType, TimestampType}
+import org.apache.spark.sql.flint.config.FlintSparkConf
+import org.apache.spark.sql.types._
 
 /**
  * Flint PPL parser that parse PPL Query Language into spark logical plan - if parse fails it will
@@ -94,10 +96,36 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
 
       // Register each Spark catalog to Calcite schema
       val rootSchema = CalciteSchema.createRootSchema(true, false).plus() // SchemaPlus
+      /*
       spark.catalog.listDatabases().collect().foreach { db =>
         val sparkCatalog = rootSchema.add(db.catalog, new AbstractSchema())
         sparkCatalog.add(db.name, new SparkSchema(spark))
       }
+       */
+      val sparkCatalog = rootSchema.add("spark_catalog", new AbstractSchema())
+      sparkCatalog.add(
+        "default",
+        new AbstractSchema() {
+          val osEngine =
+            new OpenSearchStorageEngine(
+              new OpenSearchRestClient(
+                OpenSearchClientUtils.createRestHighLevelClient(FlintSparkConf().flintOptions())),
+              null)
+
+          override def getTableMap: util.Map[String, Table] = {
+            new util.HashMap[String, Table]() {
+              override def get(key: AnyRef): Table = {
+                if (!super.containsKey(key)) {
+                  osEngine
+                    .getTable(null, new QualifiedName(key.asInstanceOf[String]).toString)
+                    .asInstanceOf[Table]
+                } else {
+                  super.get(key)
+                }
+              }
+            }
+          }
+        });
 
       // Analyze by Calcite
       val config =

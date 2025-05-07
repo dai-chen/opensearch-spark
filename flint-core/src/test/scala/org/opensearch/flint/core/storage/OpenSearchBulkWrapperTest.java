@@ -32,7 +32,7 @@ import org.opensearch.flint.core.FlintOptions;
 import org.opensearch.flint.core.http.FlintRetryOptions;
 import org.opensearch.flint.core.metrics.MetricConstants;
 import org.opensearch.flint.core.metrics.MetricsTestUtil;
-import org.opensearch.rest.RestStatus;
+import org.opensearch.core.rest.RestStatus;
 
 @ExtendWith(MockitoExtension.class)
 class OpenSearchBulkWrapperTest {

@@ -8,7 +8,7 @@ package org.opensearch.flint.core.storage;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.RequestOptions;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.flint.core.IRestHighLevelClient;
 import org.opensearch.search.builder.SearchSourceBuilder;
 

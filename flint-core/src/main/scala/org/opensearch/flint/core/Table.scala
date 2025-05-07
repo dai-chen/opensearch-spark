@@ -10,8 +10,9 @@ import java.util
 
 import com.google.common.base.Strings
 import org.opensearch.common.settings.Settings
-import org.opensearch.common.xcontent.{NamedXContentRegistry, XContentType}
-import org.opensearch.common.xcontent.DeprecationHandler.IGNORE_DEPRECATIONS
+import org.opensearch.common.xcontent.XContentType
+import org.opensearch.core.xcontent.DeprecationHandler.IGNORE_DEPRECATIONS
+import org.opensearch.core.xcontent.NamedXContentRegistry
 import org.opensearch.flint.core.storage.FlintReader
 import org.opensearch.index.query.{AbstractQueryBuilder, MatchAllQueryBuilder, QueryBuilder}
 import org.opensearch.plugins.SearchPlugin

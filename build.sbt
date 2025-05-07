@@ -12,8 +12,8 @@ lazy val jacksonVersion = "2.15.2"
 
 // The transitive opensearch jackson-databind dependency version should align with Spark jackson databind dependency version.
 // Issue: https://github.com/opensearch-project/opensearch-spark/issues/442
-lazy val opensearchVersion = "2.6.0"
-lazy val opensearchMavenVersion = "2.6.0.0"
+lazy val opensearchVersion = "2.10.0"
+lazy val opensearchMavenVersion = "2.10.0.0"
 lazy val icebergVersion = "1.5.0"
 
 val scalaMinorVersion = scala212.split("\\.").take(2).mkString(".")
@@ -234,7 +234,10 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
       "com.stephenn" %% "scalatest-json-jsonassert" % "0.2.5" % "test",
       "com.github.sbt" % "junit-interface" % "0.13.3" % "test"),
     libraryDependencies ++= deps(sparkVersion),
-    unmanagedJars in Compile += baseDirectory.value / "lib" / "all-in-one-jar-3.0.0.0-beta1-SNAPSHOT.jar",
+    unmanagedJars in Compile ++= Seq(
+      baseDirectory.value / "lib" / "all-in-one-jar-3.0.0.0-beta1-SNAPSHOT.jar",
+      baseDirectory.value / "lib" / "all-in-one-opensearch-jar-3.0.0.0-beta1-SNAPSHOT.jar",
+    ),
     // ANTLR settings
     Antlr4 / antlr4Version := "4.8",
     Antlr4 / antlr4PackageName := Some("org.opensearch.flint.spark.sql"),

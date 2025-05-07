@@ -13,7 +13,7 @@ import com.amazonaws.services.glue.model.{AccessDeniedException, AWSGlueExceptio
 import com.amazonaws.services.s3.model.AmazonS3Exception
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.commons.text.StringEscapeUtils.unescapeJava
-import org.opensearch.common.Strings
+import org.opensearch.core.common.Strings
 import org.opensearch.flint.common.model.FlintStatement
 import org.opensearch.flint.core.IRestHighLevelClient
 import org.opensearch.flint.core.logging.{CustomLogging, ExceptionMessages, OperationMessage}

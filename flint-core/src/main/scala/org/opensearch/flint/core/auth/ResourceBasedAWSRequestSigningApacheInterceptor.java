@@ -15,7 +15,7 @@ import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.protocol.HttpContext;
 import org.jetbrains.annotations.TestOnly;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.flint.core.storage.OpenSearchClientUtils;
 import software.amazon.awssdk.authcrt.signer.AwsCrtV4aSigner;
 

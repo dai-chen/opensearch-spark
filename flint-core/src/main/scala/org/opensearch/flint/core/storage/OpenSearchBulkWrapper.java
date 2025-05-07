@@ -24,7 +24,7 @@ import org.opensearch.client.RestHighLevelClient;
 import org.opensearch.flint.core.http.FlintRetryOptions;
 import org.opensearch.flint.core.metrics.MetricConstants;
 import org.opensearch.flint.core.metrics.MetricsUtil;
-import org.opensearch.rest.RestStatus;
+import org.opensearch.core.rest.RestStatus;
 
 /**
  * Wrapper class for OpenSearch bulk API with retry and rate limiting capability.
