@@ -43,7 +43,8 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     val indexName = "t0001"
     withIndexName(indexName) {
       simpleIndex(indexName)
-      val df = spark.sql(s"source = $osCatalogName.default.$indexName")
+      val df = spark.sql(
+        s"source = $osCatalogName.default.$indexName | where eventName = 'event' | eval accountIdSub = substring(accountId, 2) | fields accountIdSub")
       df.explain(true)
       df.show
     }

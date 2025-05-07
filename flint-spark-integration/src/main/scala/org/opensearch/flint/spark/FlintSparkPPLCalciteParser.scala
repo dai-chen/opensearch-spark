@@ -28,13 +28,16 @@
 package org.opensearch.flint.spark
 
 import java.util
-import java.util.List
+import java.util.{Collections, List}
 
 import scala.collection.JavaConverters._
 
+import org.apache.calcite.adapter.enumerable.EnumerableConvention
 import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.CalciteSchema
-import org.apache.calcite.plan.{RelTrait, RelTraitDef}
+import org.apache.calcite.plan.{RelOptPlanner, RelTrait, RelTraitDef}
+import org.apache.calcite.plan.hep.HepPlanner
+import org.apache.calcite.plan.volcano.VolcanoPlanner
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField, RelDataTypeFieldImpl}
 import org.apache.calcite.rel.{RelHomogeneousShuttle, RelNode}
 import org.apache.calcite.rel.core.TableScan
@@ -47,6 +50,7 @@ import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.tools.{Frameworks, Programs}
+import org.opensearch.common.settings.Settings
 import org.opensearch.flint.core.storage.OpenSearchClientUtils
 import org.opensearch.sql.ast.expression.QualifiedName
 import org.opensearch.sql.ast.statement.Query
@@ -54,6 +58,7 @@ import org.opensearch.sql.calcite.{CalcitePlanContext, CalciteRelNodeVisitor}
 import org.opensearch.sql.common.antlr.SyntaxCheckException
 import org.opensearch.sql.executor.{OpenSearchTypeSystem, QueryType}
 import org.opensearch.sql.opensearch.client.OpenSearchRestClient
+import org.opensearch.sql.opensearch.setting.OpenSearchSettings
 import org.opensearch.sql.opensearch.storage.OpenSearchStorageEngine
 import org.opensearch.sql.ppl.antlr.PPLSyntaxParser
 import org.opensearch.sql.ppl.parser.{AstBuilder, AstStatementBuilder}
@@ -122,7 +127,9 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           .parserConfig(SqlParser.Config.DEFAULT)
           .defaultSchema(rootSchema)
           .traitDefs(null.asInstanceOf[List[RelTraitDef[_ <: RelTrait]]])
-          .programs(Programs.calc(DefaultRelMetadataProvider.INSTANCE))
+          // The program below causes stackoverflow when physical planning
+          // .programs(Programs.calc(DefaultRelMetadataProvider.INSTANCE))
+          .programs(Programs.heuristicJoinOrder(Programs.RULE_SET, false, 2))
           .typeSystem(OpenSearchTypeSystem.INSTANCE)
           .build()
 
@@ -140,6 +147,7 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           |   SQL query: $sqlText
           |""".stripMargin)
 
+      // Optional: generate logical optimized plan
       val shuttle = new RelHomogeneousShuttle() {
         override def visit(scan: TableScan): RelNode = {
           val table = scan.getTable
@@ -152,7 +160,22 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           super.visit(scan)
         }
       }
-      // val rel2 = relNode.accept(shuttle)
+      val rel2 = relNode.accept(shuttle)
+      logInfo(s"Calcite physical plan 1: $rel2")
+
+      // Generate physical plan
+      val ruleProgram = config.getPrograms.get(0)
+      val planner = relNode.getCluster.getPlanner
+      val traitSet = relNode.getTraitSet.replace(EnumerableConvention.INSTANCE)
+      // run the optimizer (this is where EnumerableIndexScanRule & your OpenSearchIndexRules get registered)
+      val optimizedRel =
+        ruleProgram.run(
+          planner,
+          relNode,
+          traitSet,
+          Collections.emptyList(),
+          Collections.emptyList())
+      logInfo(s"Calcite physical plan 2: $optimizedRel")
 
       sparkParser.parsePlan(sqlText)
     } catch {
@@ -186,7 +209,7 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           OpenSearchClientUtils.createRestHighLevelClient(FlintSparkConf().flintOptions())),
         null)
 
-    override def getTableMap: util.Map[String, Table] = {
+    private val tableMap: util.Map[String, Table] =
       new util.HashMap[String, Table]() {
         override def get(key: AnyRef): Table = {
           if (!super.containsKey(key)) {
@@ -199,7 +222,8 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           }
         }
       }
-    }
+
+    override def getTableMap: util.Map[String, Table] = tableMap
   }
 
   class SparkSchema(spark: SparkSession) extends AbstractSchema {
