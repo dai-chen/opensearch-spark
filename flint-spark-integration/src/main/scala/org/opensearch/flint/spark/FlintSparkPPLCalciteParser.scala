@@ -97,35 +97,24 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
       // Register each Spark catalog to Calcite schema
       val rootSchema = CalciteSchema.createRootSchema(true, false).plus() // SchemaPlus
       /*
-      spark.catalog.listDatabases().collect().foreach { db =>
-        val sparkCatalog = rootSchema.add(db.catalog, new AbstractSchema())
-        sparkCatalog.add(db.name, new SparkSchema(spark))
+      val catalogManager = spark.sessionState.catalogManager
+      catalogManager.listCatalogs(Option.empty).foreach { catalog =>
+        logInfo(s"Registering Spark catalog $catalog to Calcite")
+        val sparkCatalog = rootSchema.add(catalog, new AbstractSchema())
+        val calciteSchema =
+          catalog match {
+            case "dev" => new OpenSearchSchema // OS catalog name in IT
+            case _ => new SparkSchema(spark)
+          }
+        sparkCatalog.add("default", calciteSchema)
       }
        */
-      val sparkCatalog = rootSchema.add("spark_catalog", new AbstractSchema())
-      sparkCatalog.add(
-        "default",
-        new AbstractSchema() {
-          val osEngine =
-            new OpenSearchStorageEngine(
-              new OpenSearchRestClient(
-                OpenSearchClientUtils.createRestHighLevelClient(FlintSparkConf().flintOptions())),
-              null)
-
-          override def getTableMap: util.Map[String, Table] = {
-            new util.HashMap[String, Table]() {
-              override def get(key: AnyRef): Table = {
-                if (!super.containsKey(key)) {
-                  osEngine
-                    .getTable(null, new QualifiedName(key.asInstanceOf[String]).toString)
-                    .asInstanceOf[Table]
-                } else {
-                  super.get(key)
-                }
-              }
-            }
-          }
-        });
+      rootSchema
+        .add("dev", new AbstractSchema())
+        .add("default", new OpenSearchSchema)
+      rootSchema
+        .add("spark_catalog", new AbstractSchema())
+        .add("default", new SparkSchema(spark))
 
       // Analyze by Calcite
       val config =
@@ -189,6 +178,29 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
   override def parseDataType(sqlText: String): DataType = sparkParser.parseDataType(sqlText)
 
   override def parseQuery(sqlText: String): LogicalPlan = sparkParser.parseQuery(sqlText)
+
+  class OpenSearchSchema extends AbstractSchema {
+    private val osEngine =
+      new OpenSearchStorageEngine(
+        new OpenSearchRestClient(
+          OpenSearchClientUtils.createRestHighLevelClient(FlintSparkConf().flintOptions())),
+        null)
+
+    override def getTableMap: util.Map[String, Table] = {
+      new util.HashMap[String, Table]() {
+        override def get(key: AnyRef): Table = {
+          if (!super.containsKey(key)) {
+            val fullName = new QualifiedName(key.asInstanceOf[String])
+            osEngine
+              .getTable(null, fullName.getSuffix)
+              .asInstanceOf[Table]
+          } else {
+            super.get(key)
+          }
+        }
+      }
+    }
+  }
 
   class SparkSchema(spark: SparkSession) extends AbstractSchema {
 
