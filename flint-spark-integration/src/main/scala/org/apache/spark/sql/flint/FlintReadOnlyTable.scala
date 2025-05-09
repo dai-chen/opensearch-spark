@@ -6,28 +6,23 @@
 package org.apache.spark.sql.flint
 
 import java.util
-
 import scala.collection.JavaConverters._
-
 import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.sql.`type`.SqlTypeName
 import org.opensearch.flint.core.storage.OpenSearchClientUtils
 import org.opensearch.flint.core.table.OpenSearchCluster
 import org.opensearch.sql.calcite.`type`.ExprIPType
-import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory
-import org.opensearch.sql.data.`type`.ExprType
-import org.opensearch.sql.executor.OpenSearchTypeSystem
+import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory.TYPE_FACTORY
 import org.opensearch.sql.opensearch.client.OpenSearchRestClient
 import org.opensearch.sql.opensearch.storage.OpenSearchStorageEngine
-
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connector.catalog.{SupportsRead, Table, TableCapability}
 import org.apache.spark.sql.connector.catalog.TableCapability.BATCH_READ
 import org.apache.spark.sql.connector.read.ScanBuilder
 import org.apache.spark.sql.flint.config.FlintSparkConf
-import org.apache.spark.sql.flint.datatype.FlintDataType
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import org.opensearch.flint.spark.udt.IPAddressUDT
 
 /**
  * FlintReadOnlyTable.
@@ -51,8 +46,6 @@ class FlintReadOnlyTable(
 
   lazy val tables: Seq[org.opensearch.flint.core.Table] =
     OpenSearchCluster.apply(name, flintSparkConf.flintOptions()).asScala
-
-  lazy val TYPE_FACTORY = new OpenSearchTypeFactory(OpenSearchTypeSystem.INSTANCE)
 
   lazy val resolvedTablesSchema: StructType = tables.headOption
     .map(tbl => { // FlintDataType.deserialize(tbl.schema().asJson())
@@ -117,7 +110,8 @@ class FlintReadOnlyTable(
           val keyType = calciteType.getKeyType
           val valueType = calciteType.getValueType
           MapType(toSparkType(keyType), toSparkType(valueType), valueContainsNull = true)
-        // case ExprIPType => IPAddressUDT
+          // we didn't register UDT to Calcite Sql type names?
+        case SqlTypeName.OTHER => IPAddressUDT
         case _ =>
           // fallback to String
           StringType

@@ -64,10 +64,10 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
                        |    }
                        |  }
                        |}""".stripMargin
-      val docs = Seq("""{"ip": "192.168.0.1"}""", """{"ip": "127.0.0.1"}""")
+      val docs = Seq("""{"my_ip": "192.168.0.1"}""", """{"my_ip": "127.0.0.1"}""")
       index(indexName, oneNodeSetting, mappings, docs)
 
-      val df = spark.sql(s"source = $osCatalogName.default.$indexName | fields _id, ip, alias")
+      val df = spark.sql(s"source = $osCatalogName.default.$indexName | fields _id, my_ip, alias")
       df.explain(true)
       df.printSchema()
       df.show
