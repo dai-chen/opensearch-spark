@@ -53,10 +53,23 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
   test("Calcite-PPL basic query with OS index meta fields") {
     val indexName = "t0001"
     withIndexName(indexName) {
-      simpleIndex(indexName)
-      val df =
-        spark.sql(s"source = $osCatalogName.default.$indexName | fields accountId, _id, _index")
+      val mappings = """{
+                       |  "properties": {
+                       |    "my_ip": {
+                       |      "type": "ip"
+                       |    },
+                       |    "alias": {
+                       |      "type": "alias",
+                       |      "path": "my_ip"
+                       |    }
+                       |  }
+                       |}""".stripMargin
+      val docs = Seq("""{"ip": "192.168.0.1"}""", """{"ip": "127.0.0.1"}""")
+      index(indexName, oneNodeSetting, mappings, docs)
+
+      val df = spark.sql(s"source = $osCatalogName.default.$indexName | fields _id, ip, alias")
       df.explain(true)
+      df.printSchema()
       df.show
     }
   }

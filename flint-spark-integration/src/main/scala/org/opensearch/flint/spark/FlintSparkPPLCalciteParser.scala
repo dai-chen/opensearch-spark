@@ -32,9 +32,10 @@ import java.util.{Collections, List}
 
 import scala.collection.JavaConverters._
 
-import org.apache.calcite.adapter.enumerable.EnumerableConvention
+import org.apache.calcite.adapter.enumerable.{EnumerableConvention, EnumerableProject, EnumerableRel, RexToLixTranslator}
 import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.CalciteSchema
+import org.apache.calcite.linq4j.tree.{Expression => Linq4jExpression, Expressions}
 import org.apache.calcite.plan.{RelOptPlanner, RelTrait, RelTraitDef}
 import org.apache.calcite.plan.hep.HepPlanner
 import org.apache.calcite.plan.volcano.VolcanoPlanner
@@ -44,6 +45,8 @@ import org.apache.calcite.rel.core.TableScan
 import org.apache.calcite.rel.logical.LogicalTableScan
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider
 import org.apache.calcite.rel.rel2sql.RelToSqlConverter
+import org.apache.calcite.rex.{RexCall, RexInputRef, RexLiteral, RexNode}
+import org.apache.calcite.runtime.SqlFunctions
 import org.apache.calcite.schema.Table
 import org.apache.calcite.schema.impl.{AbstractSchema, AbstractTable}
 import org.apache.calcite.sql.`type`.SqlTypeName
@@ -60,12 +63,15 @@ import org.opensearch.sql.executor.{OpenSearchTypeSystem, QueryType}
 import org.opensearch.sql.opensearch.client.OpenSearchRestClient
 import org.opensearch.sql.opensearch.setting.OpenSearchSettings
 import org.opensearch.sql.opensearch.storage.OpenSearchStorageEngine
+import org.opensearch.sql.opensearch.storage.scan.CalciteEnumerableIndexScan
 import org.opensearch.sql.ppl.antlr.PPLSyntaxParser
 import org.opensearch.sql.ppl.parser.{AstBuilder, AstStatementBuilder}
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{functions => F, DataFrame}
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -305,4 +311,80 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           throw new UnsupportedOperationException(s"Unsupported Spark type: $other")
       }
   }
+
+  /**
+   * Main entry point to translate a Calcite RelNode to Spark DataFrame
+   */
+  /*
+  def translate(rel: RelNode): DataFrame = {
+    rel match {
+      case project: EnumerableProject =>
+        val inputDf = translate(project.getInput)
+
+        // Convert each Rex expression to a Spark Column
+        val columns = project.getProjects.asScala.zipWithIndex.map { case (rexNode, idx) =>
+          val outputName = project.getRowType.getFieldNames.get(idx)
+
+          // TODO: translateRexNodeToColumn(rexNode, inputDf).as(outputName)
+        }
+        inputDf.select(columns: _*)
+
+      case scan: CalciteEnumerableIndexScan =>
+        // Create DataFrame from OpenSearch index scan
+        // TODO createDataFrameFromIndexScan(scan)
+
+      case _ =>
+        throw new UnsupportedOperationException(s"Unsupported RelNode type: ${rel.getClass.getName}")
+    }
+  }
+
+  private def createCalciteFunctionImpl(rexNode: RexNode, inputTypes: Array[DataType]): AnyRef = {
+    // Get JavaTypeFactory from the Calcite cluster
+    val typeFactory = rexNode.getCluster.getTypeFactory.asInstanceOf[JavaTypeFactory]
+
+    // Create a RexProgram that represents our expression
+    val inputRowType = rexNode.getType.getFactory.createStructType(
+      inputTypes.map(t => convertSparkTypeToCalciteType(t, typeFactory)))
+
+    val rexBuilder = rexNode.getCluster.getRexBuilder
+    val programBuilder = new RexProgramBuilder(inputRowType, rexBuilder)
+    val projExpr = rexNode  // The expression we want to compile
+    programBuilder.addProject(projExpr, "result")
+    val rexProgram = programBuilder.getProgram
+
+    // Create parameter expressions for our function
+    val parameterExpressions = new java.util.ArrayList[ParameterExpression]()
+    for (i <- 0 until inputTypes.length) {
+      val javaClass = getJavaClassForSparkType(inputTypes(i))
+      parameterExpressions.add(Expressions.parameter(javaClass, s"param$i"))
+    }
+
+    // Set up a block builder to hold the translated expression
+    val blockBuilder = new BlockBuilder()
+
+    // Create an expression factory for the translator
+    val physType = EnumerableRel.defaultPhysType(typeFactory, inputRowType)
+    val inputGetter = RexToLixTranslator.InputGetterImpl.create(physType, parameterExpressions)
+
+    // Translate the Rex expression to a Linq4j expression using RexToLixTranslator
+    val translator = RexToLixTranslator.forProgram(
+      rexProgram,
+      typeFactory,
+      blockBuilder,
+      inputGetter)
+
+    val translatedExpr = translator.translate(projExpr)
+
+    // Return the result expression
+    val outputJavaType = getJavaClassForSparkType(convertCalciteTypeToSparkType(rexNode.getType))
+    blockBuilder.append(Expressions.return_(null, translatedExpr))
+
+    // Compile the expression into a function
+    val methodBlock = blockBuilder.toBlock
+    val lambda = Expressions.lambda(methodBlock, parameterExpressions)
+
+    // Create and return a ScalarFunctionImpl
+    ScalarFunctionImpl.create(lambda.compile())
+  }
+   */
 }
