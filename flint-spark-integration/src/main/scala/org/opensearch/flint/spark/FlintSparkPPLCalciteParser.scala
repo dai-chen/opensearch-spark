@@ -29,31 +29,22 @@ package org.opensearch.flint.spark
 
 import java.util
 import java.util.{Collections, List}
-
 import scala.collection.JavaConverters._
-
-import org.apache.calcite.adapter.enumerable.{EnumerableConvention, EnumerableProject, EnumerableRel, RexToLixTranslator}
+import org.apache.calcite.adapter.enumerable.{EnumerableConvention, EnumerableProject, EnumerableRel, EnumerableRules, EnumerableTableScan, RexToLixTranslator}
 import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.CalciteSchema
-import org.apache.calcite.linq4j.tree.{Expression => Linq4jExpression, Expressions}
-import org.apache.calcite.plan.{RelOptPlanner, RelTrait, RelTraitDef}
-import org.apache.calcite.plan.hep.HepPlanner
-import org.apache.calcite.plan.volcano.VolcanoPlanner
+import org.apache.calcite.plan.{RelOptTable, RelTrait, RelTraitDef}
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField, RelDataTypeFieldImpl}
 import org.apache.calcite.rel.{RelHomogeneousShuttle, RelNode}
 import org.apache.calcite.rel.core.TableScan
 import org.apache.calcite.rel.logical.LogicalTableScan
-import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider
 import org.apache.calcite.rel.rel2sql.RelToSqlConverter
-import org.apache.calcite.rex.{RexCall, RexInputRef, RexLiteral, RexNode}
-import org.apache.calcite.runtime.SqlFunctions
-import org.apache.calcite.schema.Table
+import org.apache.calcite.schema.{Table, TranslatableTable}
 import org.apache.calcite.schema.impl.{AbstractSchema, AbstractTable}
 import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.tools.{Frameworks, Programs}
-import org.opensearch.common.settings.Settings
 import org.opensearch.flint.core.storage.OpenSearchClientUtils
 import org.opensearch.sql.ast.expression.QualifiedName
 import org.opensearch.sql.ast.statement.Query
@@ -61,17 +52,12 @@ import org.opensearch.sql.calcite.{CalcitePlanContext, CalciteRelNodeVisitor}
 import org.opensearch.sql.common.antlr.SyntaxCheckException
 import org.opensearch.sql.executor.{OpenSearchTypeSystem, QueryType}
 import org.opensearch.sql.opensearch.client.OpenSearchRestClient
-import org.opensearch.sql.opensearch.setting.OpenSearchSettings
 import org.opensearch.sql.opensearch.storage.OpenSearchStorageEngine
-import org.opensearch.sql.opensearch.storage.scan.CalciteEnumerableIndexScan
 import org.opensearch.sql.ppl.antlr.PPLSyntaxParser
 import org.opensearch.sql.ppl.parser.{AstBuilder, AstStatementBuilder}
-
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.{functions => F, DataFrame}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -154,7 +140,6 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           |""".stripMargin)
 
       // Optional: generate logical optimized plan
-      /*
       val shuttle = new RelHomogeneousShuttle() {
         override def visit(scan: TableScan): RelNode = {
           val table = scan.getTable
@@ -183,7 +168,6 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           Collections.emptyList(),
           Collections.emptyList())
       logInfo(s"Calcite physical plan 2: $optimizedRel")
-       */
 
       sparkParser.parsePlan(sqlText)
     } catch {
@@ -248,7 +232,7 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
             else s"${t.database}.${t.name}"
 
           // upcast to Table here:
-          val calciteTable: Table = new AbstractTable {
+          val calciteTable: Table = new AbstractTable with TranslatableTable {
             override def getRowType(typeFactory: RelDataTypeFactory): RelDataType = {
               val builder = typeFactory.builder()
               val df = spark.table(fullName)
@@ -260,6 +244,18 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
                 builder.add(f.name, nullable) // only (String, RelDataType) overload exists
               }
               builder.build()
+            }
+
+            override def toRel(context: RelOptTable.ToRelContext, relOptTable: RelOptTable): RelNode = {
+              // Create an EnumerableTableScan which is a physical node with ENUMERABLE convention
+              val cluster = context.getCluster
+              val traitSet = cluster.traitSet.replace(EnumerableConvention.INSTANCE)
+              new EnumerableTableScan(
+                cluster,         // cluster
+                traitSet,        // trait set with ENUMERABLE convention
+                relOptTable,     // table
+                null             // elementType can be null
+              )
             }
           }
 
