@@ -154,6 +154,7 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           |""".stripMargin)
 
       // Optional: generate logical optimized plan
+      /*
       val shuttle = new RelHomogeneousShuttle() {
         override def visit(scan: TableScan): RelNode = {
           val table = scan.getTable
@@ -182,6 +183,7 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           Collections.emptyList(),
           Collections.emptyList())
       logInfo(s"Calcite physical plan 2: $optimizedRel")
+       */
 
       sparkParser.parsePlan(sqlText)
     } catch {

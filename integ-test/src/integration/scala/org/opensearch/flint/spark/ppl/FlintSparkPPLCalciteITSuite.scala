@@ -74,6 +74,44 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     }
   }
 
+  test("Calcite-PPL basic query with OS index join S3") {
+    val indexName = "http_logs"
+    withIndexName(indexName) {
+      val mappings = """{
+                       |  "properties": {
+                       |    "id": {
+                       |      "type": "integer"
+                       |    },
+                       |    "clientip": {
+                       |      "type": "ip"
+                       |    },
+                       |    "status": {
+                       |      "type": "integer"
+                       |    }
+                       |  }
+                       |}""".stripMargin
+      val docs = Seq(
+        """{"id": 1, "clientip": "192.168.0.1", "status": 404}""",
+        """{"id": 2, "clientip": "127.0.0.1", "status": 200}""",
+        """{"id": 3, "clientip": "198.168.0.100", "status": 200}""")
+      index(indexName, oneNodeSetting, mappings, docs)
+
+      val tableName = "ip_table"
+      withTable(tableName) {
+        createIpAddressTable(tableName)
+
+        val df = spark.sql(s"""
+           | source = $osCatalogName.default.$indexName |
+           | where status = 200 |
+           | lookup spark_catalog.default.$tableName id |
+           | fields id, clientip, isV6, isValid
+           |""".stripMargin)
+        df.explain(true)
+        df.show
+      }
+    }
+  }
+
   test(s"Calcite-PPL basic query") {
     val df = sql(s"source = $testTable | eval f = crc32(name) | fields f")
     df.explain(true)
