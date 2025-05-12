@@ -63,6 +63,7 @@ import org.apache.spark.sql.catalyst.parser._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.flint.config.FlintSparkConf
 import org.apache.spark.sql.types._
+import org.opensearch.flint.spark.calcite.CalcitePhyPlanToSparkTranslator
 
 /**
  * Flint PPL parser that parse PPL Query Language into spark logical plan - if parse fails it will
@@ -169,6 +170,10 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           Collections.emptyList())
       logInfo(s"Calcite physical plan 2: $optimizedRel")
 
+      val sparkPlan = new CalcitePhyPlanToSparkTranslator(spark).translate(optimizedRel)
+      logInfo(s"Spark plan:")
+      sparkPlan.explain
+
       sparkParser.parsePlan(sqlText)
     } catch {
       // Fall back to Spark parse plan logic if flint cannot parse
@@ -246,15 +251,17 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
               builder.build()
             }
 
-            override def toRel(context: RelOptTable.ToRelContext, relOptTable: RelOptTable): RelNode = {
+            override def toRel(
+                context: RelOptTable.ToRelContext,
+                relOptTable: RelOptTable): RelNode = {
               // Create an EnumerableTableScan which is a physical node with ENUMERABLE convention
               val cluster = context.getCluster
               val traitSet = cluster.traitSet.replace(EnumerableConvention.INSTANCE)
               new EnumerableTableScan(
-                cluster,         // cluster
-                traitSet,        // trait set with ENUMERABLE convention
-                relOptTable,     // table
-                null             // elementType can be null
+                cluster, // cluster
+                traitSet, // trait set with ENUMERABLE convention
+                relOptTable, // table
+                null // elementType can be null
               )
             }
           }
