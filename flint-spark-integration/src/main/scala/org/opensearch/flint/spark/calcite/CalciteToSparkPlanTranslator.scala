@@ -42,7 +42,7 @@ class CalcitePhyPlanToSparkTranslator(spark: SparkSession) {
         translateJoin(join)
 
       case tableScan: EnumerableTableScan =>
-        translateIndexScan(tableScan)
+        translateTableScan(tableScan)
 
       case indexScan: CalciteEnumerableIndexScan =>
         translateIndexScan(indexScan)
@@ -182,7 +182,7 @@ class CalcitePhyPlanToSparkTranslator(spark: SparkSession) {
   /**
    * Translate TableScan to DataFrame
    */
-  private def translateIndexScan(scan: EnumerableTableScan): DataFrame = {
+  private def translateTableScan(scan: EnumerableTableScan): DataFrame = {
     val tableName = scan.getTable.getQualifiedName.asScala
 
     // Create a DataFrame from the table
@@ -271,7 +271,7 @@ class CalcitePhyPlanToSparkTranslator(spark: SparkSession) {
         var remainingIdx = inputRef.getIndex
         for (input <- inputs) {
           if (remainingIdx < input.columns.length) {
-            return F.col(input.columns(remainingIdx))
+            return input.col(input.columns(remainingIdx))
           }
           remainingIdx -= input.columns.length
         }

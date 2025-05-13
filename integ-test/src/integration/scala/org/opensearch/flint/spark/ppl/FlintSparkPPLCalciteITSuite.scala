@@ -104,7 +104,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
            | source = $osCatalogName.default.$indexName |
            | where status = 200 |
            | lookup spark_catalog.default.$tableName id |
-           | fields id, clientip, isV6, isValid
+           | fields clientip, isV6, isValid
            |""".stripMargin)
         df.explain(true)
         df.show
