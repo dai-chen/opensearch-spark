@@ -19,6 +19,7 @@ import org.apache.calcite.sql.`type`.SqlTypeName
 import org.opensearch.sql.opensearch.storage.scan.CalciteEnumerableIndexScan
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession, functions => F}
 import org.apache.spark.sql.api.java.{UDF0, UDF1, UDF2, UDF3}
+import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.types._
 import org.opensearch.flint.spark.udt.IPAddressUDT
 import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory.TYPE_FACTORY
@@ -450,6 +451,7 @@ class CalciteToSparkPlanTranslator(spark: SparkSession) {
 
       case 3 =>
         // Ternary function
+        /*
         val func = new UDF3[Any, Any, Any, Any] {
           override def call(a: Any, b: Any, c: Any): Any = {
             val values = Array(
@@ -460,6 +462,10 @@ class CalciteToSparkPlanTranslator(spark: SparkSession) {
           }
         }
         spark.udf.register(udfName, func, sparkReturnType)
+         */
+
+        val udfCompiler = new JaninoSparkUdfCompiler(rexBuilder)
+        spark.udf.register(udfName, udfCompiler.compile(java.util.Arrays.asList(call), inputRowType), sparkReturnType)
 
       case _ =>
         // For more than 3 arguments, we need a different approach
@@ -468,20 +474,6 @@ class CalciteToSparkPlanTranslator(spark: SparkSession) {
 
     // 8) Call the UDF with the operand columns
     F.callUDF(udfName, operandColumns: _*)
-  }
-
-  /**
-   * Find the maximum input reference index in a RexNode tree
-   */
-  private def findMaxInputRef(node: RexNode): Int = {
-    node match {
-      case ref: org.apache.calcite.rex.RexInputRef => ref.getIndex
-      case call: RexCall =>
-        // Fix for Scala 2.12 which doesn't have maxOption
-        val indices = call.getOperands.asScala.map(findMaxInputRef)
-        if (indices.isEmpty) -1 else indices.max
-      case _ => -1
-    }
   }
 
   /**
