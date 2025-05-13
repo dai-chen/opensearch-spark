@@ -5,21 +5,29 @@
 
 package org.opensearch.flint.spark.calcite
 
+import java.util.Locale
 import scala.collection.JavaConverters._
+import org.apache.calcite.DataContext
 import org.apache.calcite.adapter.enumerable._
-import org.apache.calcite.rel.`type`.RelDataType
+import org.apache.calcite.interpreter.{Context, JaninoRexCompiler}
+import org.apache.calcite.jdbc.JavaTypeFactoryImpl
 import org.apache.calcite.rel.RelNode
+import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.rel.core._
 import org.apache.calcite.rex._
 import org.apache.calcite.sql.`type`.SqlTypeName
-import org.apache.spark.sql.{Column, DataFrame, SparkSession, functions => F}
-import org.apache.spark.sql.types._
 import org.opensearch.sql.opensearch.storage.scan.CalciteEnumerableIndexScan
+import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession, functions => F}
+import org.apache.spark.sql.api.java.{UDF0, UDF1, UDF2, UDF3}
+import org.apache.spark.sql.types._
+import org.opensearch.flint.spark.udt.IPAddressUDT
+import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory.TYPE_FACTORY
+import org.opensearch.sql.calcite.`type`.ExprIPType
 
 /**
  * Translates Calcite RelNode physical plans to Spark DataFrame operations
  */
-class CalcitePhyPlanToSparkTranslator(spark: SparkSession) {
+class CalciteToSparkPlanTranslator(spark: SparkSession) {
 
   /**
    * Main entry point: Convert a Calcite RelNode tree to a Spark DataFrame
@@ -153,31 +161,31 @@ class CalcitePhyPlanToSparkTranslator(spark: SparkSession) {
   /**
    * Translate Join to DataFrame join()
    */
-    private def translateJoin(join: Join): DataFrame = {
-      val left = translate(join.getLeft)
-      val right = translate(join.getRight)
+  private def translateJoin(join: Join): DataFrame = {
+    val left = translate(join.getLeft)
+    val right = translate(join.getRight)
 
-      // Translate join condition
-      val condition = if (join.getCondition != null) {
-        translateRexNodeToColumn(join.getCondition, left, right)
-      } else {
-        null // Natural join or cross join
-      }
-
-      // Map join type to Spark join type
-      val joinType = join.getJoinType match {
-        case JoinRelType.INNER => "inner"
-        case JoinRelType.LEFT => "left_outer"
-        case JoinRelType.RIGHT => "right_outer"
-        case JoinRelType.FULL => "full_outer"
-        case JoinRelType.SEMI => "left_semi"
-        case JoinRelType.ANTI => "left_anti"
-        case _ =>
-          throw new UnsupportedOperationException(s"Unsupported join type: ${join.getJoinType}")
-      }
-
-      left.join(right, condition, joinType)
+    // Translate join condition
+    val condition = if (join.getCondition != null) {
+      translateRexNodeToColumn(join.getCondition, left, right)
+    } else {
+      null // Natural join or cross join
     }
+
+    // Map join type to Spark join type
+    val joinType = join.getJoinType match {
+      case JoinRelType.INNER => "inner"
+      case JoinRelType.LEFT => "left_outer"
+      case JoinRelType.RIGHT => "right_outer"
+      case JoinRelType.FULL => "full_outer"
+      case JoinRelType.SEMI => "left_semi"
+      case JoinRelType.ANTI => "left_anti"
+      case _ =>
+        throw new UnsupportedOperationException(s"Unsupported join type: ${join.getJoinType}")
+    }
+
+    left.join(right, condition, joinType)
+  }
 
   /**
    * Translate TableScan to DataFrame
@@ -323,62 +331,156 @@ class CalcitePhyPlanToSparkTranslator(spark: SparkSession) {
     val operandColumns =
       call.getOperands.asScala.map(node => translateRexNodeToColumn(node, inputs: _*))
 
+    // Handle common operators directly for better performance
     call.getOperator.getName match {
       // Comparison operators
-      case "=" => operandColumns(0) === operandColumns(1)
-      case "<>" => operandColumns(0) =!= operandColumns(1)
-      case ">" => operandColumns(0) > operandColumns(1)
-      case ">=" => operandColumns(0) >= operandColumns(1)
-      case "<" => operandColumns(0) < operandColumns(1)
-      case "<=" => operandColumns(0) <= operandColumns(1)
+      case "=" => return operandColumns(0) === operandColumns(1)
+      case "<>" => return operandColumns(0) =!= operandColumns(1)
+      case ">" => return operandColumns(0) > operandColumns(1)
+      case ">=" => return operandColumns(0) >= operandColumns(1)
+      case "<" => return operandColumns(0) < operandColumns(1)
+      case "<=" => return operandColumns(0) <= operandColumns(1)
 
       // Logical operators
-      case "AND" => operandColumns(0) && operandColumns(1)
-      case "OR" => operandColumns(0) || operandColumns(1)
-      case "NOT" => !operandColumns(0)
+      case "AND" => return operandColumns(0) && operandColumns(1)
+      case "OR" => return operandColumns(0) || operandColumns(1)
+      case "NOT" => return !operandColumns(0)
 
       // Arithmetic operators
-      case "+" => operandColumns(0) + operandColumns(1)
-      case "-" => operandColumns(0) - operandColumns(1)
-      case "*" => operandColumns(0) * operandColumns(1)
-      case "/" => operandColumns(0) / operandColumns(1)
-      case "MOD" => operandColumns(0) % operandColumns(1)
+      case "+" => return operandColumns(0) + operandColumns(1)
+      case "-" => return operandColumns(0) - operandColumns(1)
+      case "*" => return operandColumns(0) * operandColumns(1)
+      case "/" => return operandColumns(0) / operandColumns(1)
+      case "MOD" => return operandColumns(0) % operandColumns(1)
 
-      // String functions
-      case "CONCAT" => F.concat(operandColumns: _*)
-      case "UPPER" => F.upper(operandColumns(0))
-      case "LOWER" => F.lower(operandColumns(0))
-      // case "SUBSTRING" =>
-      //  F.substring(operandColumns(0), operandColumns(1), operandColumns(2))
-
-      // Type conversions
+      // A few other common ones
+      case "CONCAT" => return F.concat(operandColumns: _*)
+      case "UPPER" => return F.upper(operandColumns(0))
+      case "LOWER" => return F.lower(operandColumns(0))
+      case "IS NULL" => return operandColumns(0).isNull
+      case "IS NOT NULL" => return operandColumns(0).isNotNull
       case "CAST" =>
         val targetType = convertCalciteTypeToSparkType(call.getType)
-        operandColumns(0).cast(targetType)
+        return operandColumns(0).cast(targetType)
 
-      // Other operators
-      case "CASE" =>
-        // CASE WHEN ... THEN ... ELSE ... END
-        val numOperands = operandColumns.size
-        val elseColumn = operandColumns.last
+      // For other operators - use JaninoRexCompiler approach
+      case _ => // Continue to UDF generation below
+    }
 
-        // Build the CASE expression
-        var caseExpr = elseColumn
-        for (i <- (0 until (numOperands - 1) / 2).reverse) {
-          val whenColumn = operandColumns(i * 2)
-          val thenColumn = operandColumns(i * 2 + 1)
-          caseExpr = F.when(whenColumn, thenColumn).otherwise(caseExpr)
+    // If we reach here, we need to generate a UDF for this function
+
+    // 1) Build a Calcite row type from input schemas
+    val typeFactory = TYPE_FACTORY
+    val fields = inputs.toList.flatMap(_.schema.fields)
+    val sqlTypes: java.util.List[RelDataType] = fields
+      .map(f => typeFactory.createSqlType(
+        f.dataType match {
+          case StringType => SqlTypeName.VARCHAR
+          case LongType => SqlTypeName.BIGINT
+          case IPAddressUDT => new ExprIPType(typeFactory).getSqlTypeName
+          case _ =>
+            SqlTypeName.valueOf(f.dataType.typeName.toUpperCase(Locale.ROOT))
         }
-        caseExpr
+      )).asJava
+    val fieldNames: java.util.List[String] = fields.map(_.name).asJava
+    val inputRowType = typeFactory.createStructType(sqlTypes, fieldNames)
 
-      case "IS NULL" => operandColumns(0).isNull
-      case "IS NOT NULL" => operandColumns(0).isNotNull
+    // 2) Create RexBuilder and JaninoRexCompiler
+    val rexBuilder = new RexBuilder(typeFactory)
+    val compiler = new JaninoRexCompiler(rexBuilder)
 
-      // case "LIKE" => operandColumns(0).like(operandColumns(1))
+    // 3) Compile the expression - this returns a Scalar.Producer
+    val scalarProducer = compiler.compile(java.util.Arrays.asList(call), inputRowType)
 
-      // Handle other functions - could add many more
-      case name =>
-        throw new UnsupportedOperationException(s"Unsupported operator: $name")
+    // Create a DataContext (can be null for most cases if your function doesn't use it)
+    val dataContext = new DataContext {
+      override def getRootSchema = null
+      override def getTypeFactory = typeFactory
+      override def getQueryProvider = null
+      override def get(name: String) = null
+    }
+
+    // Get the scalar from the producer
+    val scalar = scalarProducer.apply(dataContext)
+
+    // 4) Generate a unique UDF name
+    val udfName = s"calcite_udf_${System.currentTimeMillis}_${System.nanoTime % 10000}"
+    val sparkReturnType = convertCalciteTypeToSparkType(call.getType)
+
+    // 5) Determine the arity of the function based on max input ref
+    // val maxInputRef = findMaxInputRef(call)
+    val inputCount = call.getOperands.size // maxInputRef + 1
+
+    // 6) Create an instance of Context outside UDF for accessibility
+    // Keep a reference to the scalar for UDF execution
+    val scalarRef = scalar
+
+    // 7) Register UDF with appropriate arity
+    inputCount match {
+      case 0 =>
+        // Nullary function
+        val func = new UDF0[Any] {
+          override def call(): Any = {
+            // Create context inside call method
+            val values = Array.empty[AnyRef]
+            scalarRef.execute(null, values)
+          }
+        }
+        spark.udf.register(udfName, func, sparkReturnType)
+
+      case 1 =>
+        // Unary function
+        val func = new UDF1[Any, Any] {
+          override def call(a: Any): Any = {
+            val values = Array(a.asInstanceOf[AnyRef])
+            scalarRef.execute(null, values)
+          }
+        }
+        spark.udf.register(udfName, func, sparkReturnType)
+
+      case 2 =>
+        // Binary function
+        val func = new UDF2[Any, Any, Any] {
+          override def call(a: Any, b: Any): Any = {
+            val values = Array(a.asInstanceOf[AnyRef], b.asInstanceOf[AnyRef])
+            scalarRef.execute(null, values)
+          }
+        }
+        spark.udf.register(udfName, func, sparkReturnType)
+
+      case 3 =>
+        // Ternary function
+        val func = new UDF3[Any, Any, Any, Any] {
+          override def call(a: Any, b: Any, c: Any): Any = {
+            val values = Array(
+              a.asInstanceOf[AnyRef],
+              b.asInstanceOf[AnyRef],
+              c.asInstanceOf[AnyRef])
+            scalarRef.execute(null, values)
+          }
+        }
+        spark.udf.register(udfName, func, sparkReturnType)
+
+      case _ =>
+        // For more than 3 arguments, we need a different approach
+        throw new UnsupportedOperationException("Not yet implemented")
+    }
+
+    // 8) Call the UDF with the operand columns
+    F.callUDF(udfName, operandColumns: _*)
+  }
+
+  /**
+   * Find the maximum input reference index in a RexNode tree
+   */
+  private def findMaxInputRef(node: RexNode): Int = {
+    node match {
+      case ref: org.apache.calcite.rex.RexInputRef => ref.getIndex
+      case call: RexCall =>
+        // Fix for Scala 2.12 which doesn't have maxOption
+        val indices = call.getOperands.asScala.map(findMaxInputRef)
+        if (indices.isEmpty) -1 else indices.max
+      case _ => -1
     }
   }
 

@@ -29,13 +29,15 @@ package org.opensearch.flint.spark
 
 import java.util
 import java.util.{Collections, List}
+
 import scala.collection.JavaConverters._
+
 import org.apache.calcite.adapter.enumerable.{EnumerableConvention, EnumerableProject, EnumerableRel, EnumerableRules, EnumerableTableScan, RexToLixTranslator}
 import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.CalciteSchema
 import org.apache.calcite.plan.{RelOptTable, RelTrait, RelTraitDef}
-import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField, RelDataTypeFieldImpl}
 import org.apache.calcite.rel.{RelHomogeneousShuttle, RelNode}
+import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField, RelDataTypeFieldImpl}
 import org.apache.calcite.rel.core.TableScan
 import org.apache.calcite.rel.logical.LogicalTableScan
 import org.apache.calcite.rel.rel2sql.RelToSqlConverter
@@ -46,6 +48,7 @@ import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.tools.{Frameworks, Programs}
 import org.opensearch.flint.core.storage.OpenSearchClientUtils
+import org.opensearch.flint.spark.calcite.CalciteToSparkPlanTranslator
 import org.opensearch.sql.ast.expression.QualifiedName
 import org.opensearch.sql.ast.statement.Query
 import org.opensearch.sql.calcite.{CalcitePlanContext, CalciteRelNodeVisitor}
@@ -55,6 +58,7 @@ import org.opensearch.sql.opensearch.client.OpenSearchRestClient
 import org.opensearch.sql.opensearch.storage.OpenSearchStorageEngine
 import org.opensearch.sql.ppl.antlr.PPLSyntaxParser
 import org.opensearch.sql.ppl.parser.{AstBuilder, AstStatementBuilder}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
@@ -63,7 +67,6 @@ import org.apache.spark.sql.catalyst.parser._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.flint.config.FlintSparkConf
 import org.apache.spark.sql.types._
-import org.opensearch.flint.spark.calcite.CalcitePhyPlanToSparkTranslator
 
 /**
  * Flint PPL parser that parse PPL Query Language into spark logical plan - if parse fails it will
@@ -169,10 +172,12 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           Collections.emptyList(),
           Collections.emptyList())
       logInfo(s"Calcite physical plan 2: $optimizedRel")
+      logInfo(s"SparkSQL query for physical plan: ${calcitePlanToSparkSql(optimizedRel)}")
 
-      val sparkPlan = new CalcitePhyPlanToSparkTranslator(spark).translate(optimizedRel)
-      logInfo(s"Spark plan:")
-      sparkPlan.explain
+      val sparkDf = new CalciteToSparkPlanTranslator(spark).translate(optimizedRel)
+      logInfo(s"Spark plan translated from Calcite plan:")
+      sparkDf.explain(true)
+      sparkDf.show
 
       sparkParser.parsePlan(sqlText)
     } catch {
@@ -315,5 +320,12 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
         case other =>
           throw new UnsupportedOperationException(s"Unsupported Spark type: $other")
       }
+  }
+
+  private def calcitePlanToSparkSql(plan: RelNode): String = {
+    val converter = new RelToSqlConverter(SparkSqlDialect.DEFAULT)
+    val result = converter.visitRoot(plan)
+    val sqlNode = result.asStatement
+    sqlNode.toSqlString(SparkSqlDialect.DEFAULT).getSql
   }
 }
