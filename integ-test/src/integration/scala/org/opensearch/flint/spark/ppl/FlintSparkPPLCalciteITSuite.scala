@@ -30,6 +30,8 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
       .set(s"spark.sql.catalog.$osCatalogName.opensearch.port", openSearchPort.toString)
       .set(s"spark.sql.catalog.$osCatalogName.opensearch.write.refresh_policy", "wait_for")
       .set("spark.sql.session.timeZone", "UTC")
+      // .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      // .set("spark.kryo.registrationRequired", "false")
   }
 
   override def beforeAll(): Unit = {

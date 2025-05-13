@@ -111,16 +111,37 @@ public class JaninoSparkUdfCompiler {
             BlockStatement body,
             List<Statement> preamble) {
         // 1) Build unique class name
-        String pkg       = this.getClass().getPackage().getName();
+        String pkg = this.getClass().getPackage().getName();
         String className = "CalciteUdf3_" + System.nanoTime();
-        String fqcn      = pkg + "." + className;
+        String fqcn = pkg + "." + className;
 
         // 2) Assemble Java source
         StringBuilder src = new StringBuilder();
         src.append("package ").append(pkg).append(";\n");
         src.append("import org.apache.spark.sql.api.java.UDF3;\n");
+        src.append("import java.io.Serializable;\n");
+
         src.append("public class ").append(className)
-                .append(" implements UDF3<Object,Object,Object,Object> {\n");
+                .append(" implements UDF3<Object,Object,Object,Object>, Serializable {\n");
+
+        src.append("  private static final long serialVersionUID = 1L;\n\n");
+
+        // Context inner class
+        src.append("  public static class Context implements Serializable {\n");
+        src.append("    private static final long serialVersionUID = 1L;\n");
+        src.append("    public final Object[] values;\n");
+        src.append("    public final Object root = null;\n");
+        src.append("    public Context(Object a0, Object a1, Object a2) {\n");
+        src.append("      values = new Object[13];\n");
+        src.append("      values[0] = a0;\n");
+        // src.append("      values[1] = a1;\n");
+        // src.append("      values[2] = a2;\n");
+        src.append("      // Map parameters to expected positions\n");
+        src.append("      values[11] = a1;\n");
+        src.append("      values[12] = a2;\n");
+        src.append("    }\n");
+        src.append("  }\n\n");
+
         src.append("  @Override public Object call(Object a0, Object a1, Object a2) throws Exception {\n");
 
         // 3) Inject preamble statements
@@ -128,180 +149,22 @@ public class JaninoSparkUdfCompiler {
             src.append("    ").append(stmt).append("\n");
         }
 
-        // 4) Declare a values array
-        src.append("    Object[] values = new Object[1];\n");
+        // 4) Create context with the input parameters and output array
+        src.append("    Context context = new Context(a0, a1, a2);\n");
+        src.append("    Object[] outputValues = new Object[1];\n");
 
-        // 5) Inject the body (assigns into values[0])
+        // 5) Inject the body (assigns into outputValues[0])
         src.append("    // begin generated body\n");
         src.append(body).append("\n");
         src.append("    // end generated body\n");
 
         // 6) Return the computed value
-        src.append("    return values[0];\n");
+        src.append("    return outputValues[0];\n");
         src.append("  }\n");
         src.append("}\n");
 
-        // 7) Compile via Janino SimpleCompiler
-        SimpleCompiler compiler = new SimpleCompiler();
-        compiler.setParentClassLoader(getClass().getClassLoader());
-        try {
-            System.err.println("Compiled UDF code: " + src);
-            compiler.cook(src.toString());
-            Class<?> udfClass = compiler.getClassLoader().loadClass(fqcn);
-            return (UDF3<Object, Object, Object, Object>) udfClass.getDeclaredConstructor().newInstance();
-        } catch (CompileException | ReflectiveOperationException e) {
-            throw new RuntimeException("Failed to compile UDF3 class " + fqcn, e);
-        }
+        // 7) Instead of compiling here, just pass the source to LazyCompilingUDF3
+        System.err.println("Generated UDF source: " + src);
+        return new LazyCompilingUDF3(fqcn, src.toString());
     }
-
-    /*
-    public UDF3 compile(List<RexNode> nodes,
-                                   RelDataType inputRowType) {
-        final RexProgramBuilder programBuilder =
-                new RexProgramBuilder(inputRowType, rexBuilder);
-        for (RexNode node : nodes) {
-            programBuilder.addProject(node, null);
-        }
-        final RexProgram program = programBuilder.getProgram();
-
-        final BlockBuilder list = new BlockBuilder();
-        final BlockBuilder staticList = new BlockBuilder().withRemoveUnused(false);
-        final ParameterExpression context_ =
-                Expressions.parameter(Context.class, "context");
-        final ParameterExpression outputValues_ =
-                Expressions.parameter(Object[].class, "outputValues");
-        final JavaTypeFactoryImpl javaTypeFactory =
-                new JavaTypeFactoryImpl(rexBuilder.getTypeFactory().getTypeSystem());
-
-        // public void execute(Context, Object[] outputValues)
-        final RexToLixTranslator.InputGetter inputGetter =
-                new RexToLixTranslator.InputGetterImpl(
-                        Expressions.field(context_,
-                                BuiltInMethod.CONTEXT_VALUES.field),
-                        PhysTypeImpl.of(javaTypeFactory, inputRowType,
-                                JavaRowFormat.ARRAY, false));
-        final Function1<String, RexToLixTranslator.InputGetter> correlates = a0 -> {
-            throw new UnsupportedOperationException();
-        };
-        final Expression root =
-                Expressions.field(context_, BuiltInMethod.CONTEXT_ROOT.field);
-        final SqlConformance conformance =
-                SqlConformanceEnum.DEFAULT; // TODO: get this from implementor
-        final List<Expression> expressionList =
-                RexToLixTranslator.translateProjects(program, javaTypeFactory,
-                        conformance, list, staticList, null, root, inputGetter, correlates);
-        Ord.forEach(expressionList, (expression, i) ->
-                list.add(
-                        Expressions.statement(
-                                Expressions.assign(
-                                        Expressions.arrayIndex(outputValues_,
-                                                Expressions.constant(i)),
-                                        expression))));
-        return udf3(context_, outputValues_, list.toBlock(),
-                staticList.toBlock().statements);
-    }
-
-    private UDF3 udf3(ParameterExpression context_,
-                      ParameterExpression outputValues_,
-                      BlockStatement block,
-                      List<Statement> declList) {
-        final List<MemberDeclaration> declarations = new ArrayList<>();
-
-        // Create UDF3 parameter expressions
-        final ParameterExpression param1 = Expressions.parameter(Object.class, "t1");
-        final ParameterExpression param2 = Expressions.parameter(Object.class, "t2");
-        final ParameterExpression param3 = Expressions.parameter(Object.class, "t3");
-
-        // Create context setup block for UDF call method
-        final BlockBuilder callMethodBody = new BlockBuilder();
-
-        // Create local array for input values
-        Expression inputValues = callMethodBody.append("inputValues",
-                Expressions.newArrayInit(Object.class,
-                        ImmutableList.of(param1, param2, param3)));
-
-        // Create a local array for output values
-        Expression outputVals = callMethodBody.append("outputValues",
-                Expressions.newArrayBounds(Object.class, 1, Expressions.constant(1)));
-
-        // Create DataContext from parameters if needed
-        Expression dataContext = callMethodBody.append("dataContext",
-                Expressions.call(null,
-                        BuiltInMethod.DATA_CONTEXT_GET_ROOT.method));
-
-        // Create Context object from input values and dataContext
-        Expression contextVar = callMethodBody.append("context",
-                Expressions.new_(Context.class,
-                        ImmutableList.of(dataContext, inputValues)));
-
-        // Execute the original logic using our context and output values
-        callMethodBody.add(
-                Expressions.block(declList)); // Add static declarations first
-
-        // Replace references to context_ and outputValues_ with our local variables
-        BlockStatement modifiedBlock = RexToLixTranslator.replaceVariables(block,
-                ImmutableMap.of(context_, contextVar, outputValues_, outputVals));
-
-        callMethodBody.add(modifiedBlock);
-
-        // Return the result
-        callMethodBody.add(
-                Expressions.return_(null,
-                        Expressions.arrayIndex(outputVals, Expressions.constant(0))));
-
-        // Add the UDF3.call method implementation
-        declarations.add(
-                Expressions.methodDecl(Modifier.PUBLIC, Object.class,
-                        "call",
-                        ImmutableList.of(param1, param2, param3),
-                        callMethodBody.toBlock()));
-
-        // Create class declaration implementing UDF3
-        final ClassDeclaration classDeclaration =
-                Expressions.classDecl(Modifier.PUBLIC, "SparkUdf3Implementation", null,
-                        ImmutableList.of(UDF3.class), declarations);
-
-        // Add toString method for better debugging
-        declarations.add(
-                Expressions.methodDecl(Modifier.PUBLIC, String.class,
-                        "toString", ImmutableList.of(),
-                        Expressions.block(
-                                Expressions.return_(null,
-                                        Expressions.constant("SparkUdf3Implementation")))));
-
-        // Compile and instantiate the UDF
-        String classCode = Expressions.toString(declarations, "\n", false);
-        if (CalciteSystemProperty.DEBUG.value()) {
-            Util.debugCode(System.out, classCode);
-        }
-
-        try {
-            return compileUdf(classDeclaration, classCode);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to compile UDF3 implementation", e);
-        }
-    }
-
-    private UDF3 compileUdf(ClassDeclaration decl, String classCode)
-            throws CompileException, IOException {
-        final ClassBodyEvaluator evaluator = new ClassBodyEvaluator();
-        evaluator.setClassName(decl.name);
-        evaluator.setImplementedInterfaces(new Class[] {UDF3.class});
-        evaluator.setParentClassLoader(getClass().getClassLoader());
-
-        // Generate Java code and compile it
-        final Writer writer = new StringWriter();
-        final CodeFormatter formatter = new CodeFormatter(writer);
-        decl.accept(formatter);
-        evaluator.cook(classCode);
-
-        // Instantiate the generated class
-        try {
-            return (UDF3) evaluator.getClazz().getDeclaredConstructor().newInstance();
-        } catch (InstantiationException | IllegalAccessException |
-                 NoSuchMethodException | InvocationTargetException e) {
-            throw new RuntimeException("Failed to instantiate generated UDF class", e);
-        }
-    }
-     */
 }
