@@ -29,9 +29,7 @@ package org.opensearch.flint.spark
 
 import java.util
 import java.util.{Collections, List}
-
 import scala.collection.JavaConverters._
-
 import org.apache.calcite.adapter.enumerable.{EnumerableConvention, EnumerableProject, EnumerableRel, EnumerableRules, EnumerableTableScan, RexToLixTranslator}
 import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.CalciteSchema
@@ -48,7 +46,7 @@ import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.tools.{Frameworks, Programs}
 import org.opensearch.flint.core.storage.OpenSearchClientUtils
-import org.opensearch.flint.spark.calcite.CalciteToSparkPlanTranslator
+import org.opensearch.flint.spark.calcite.{CalciteToSparkPlanTranslator, CustomRelToSqlConverter}
 import org.opensearch.sql.ast.expression.QualifiedName
 import org.opensearch.sql.ast.statement.Query
 import org.opensearch.sql.calcite.{CalcitePlanContext, CalciteRelNodeVisitor}
@@ -58,7 +56,6 @@ import org.opensearch.sql.opensearch.client.OpenSearchRestClient
 import org.opensearch.sql.opensearch.storage.OpenSearchStorageEngine
 import org.opensearch.sql.ppl.antlr.PPLSyntaxParser
 import org.opensearch.sql.ppl.parser.{AstBuilder, AstStatementBuilder}
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
@@ -178,6 +175,15 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
       logInfo(s"Spark plan translated from Calcite plan:")
       sparkDf.explain(true)
       sparkDf.show
+
+      val sparkSqlFromCalcitePhy =
+        new CustomRelToSqlConverter(SparkSqlDialect.DEFAULT)
+          .visitRoot(optimizedRel)
+          .asStatement()
+          .toSqlString(SparkSqlDialect.DEFAULT)
+          .getSql
+      logInfo(s"SparkSQL query from Calcite physical plan: $sparkSqlFromCalcitePhy")
+      spark.sql(sparkSqlFromCalcitePhy).show
 
       sparkParser.parsePlan(sqlText)
     } catch {
