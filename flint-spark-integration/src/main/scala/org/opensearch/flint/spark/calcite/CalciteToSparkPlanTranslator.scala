@@ -16,14 +16,17 @@ import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.rel.core._
 import org.apache.calcite.rex._
 import org.apache.calcite.sql.`type`.SqlTypeName
-import org.opensearch.sql.opensearch.storage.scan.CalciteEnumerableIndexScan
+import org.opensearch.sql.opensearch.storage.scan.{CalciteEnumerableIndexScan, OpenSearchIndexEnumerator}
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession, functions => F}
 import org.apache.spark.sql.api.java.{UDF0, UDF1, UDF2, UDF3}
+import org.apache.spark.sql.flint.config.FlintSparkConf
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.types._
+import org.opensearch.flint.core.storage.OpenSearchClientUtils
 import org.opensearch.flint.spark.udt.IPAddressUDT
 import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory.TYPE_FACTORY
 import org.opensearch.sql.calcite.`type`.ExprIPType
+import org.opensearch.sql.opensearch.client.OpenSearchRestClient
 
 /**
  * Translates Calcite RelNode physical plans to Spark DataFrame operations
@@ -208,19 +211,13 @@ class CalciteToSparkPlanTranslator(spark: SparkSession) {
   }
 
   private def translateIndexScan(scan: CalciteEnumerableIndexScan): DataFrame = {
-    val tableName = scan.getTable.getQualifiedName.asScala
+    val indexName = scan.getTable.getQualifiedName.asScala.mkString(".")
 
-    // Create a DataFrame from the table
-    if (tableName.size == 2) {
-      // Database.table format
-      spark.table(s"${tableName(0)}.${tableName(1)}")
-    } else if (tableName.size >= 3) {
-      // Catalog.database.table format
-      spark.table(s"${tableName(0)}.${tableName(1)}.${tableName(2)}")
-    } else {
-      // Just table name
-      spark.table(tableName(0))
-    }
+    // Escape single quotes in the DSL for SQL
+    val dslQuery = scan.getDslQuery
+    val escapedDsl = dslQuery.replace("'", "''")
+
+    spark.sql(s"SELECT * FROM opensearch_query('$indexName', '$escapedDsl')")
   }
 
   /**

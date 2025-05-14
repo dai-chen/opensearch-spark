@@ -35,8 +35,8 @@ object FlintSparkConf {
    * Create FlintSparkConf from Datasource options. if no options provided, FlintSparkConf will
    * read configuraiton from SQLConf.
    */
-  def apply(options: JMap[String, String] = new util.HashMap[String, String]()): FlintSparkConf =
-    new FlintSparkConf(options)
+  def apply(options: JMap[String, String] = new util.HashMap[String, String](), dsl: String = ""): FlintSparkConf =
+    new FlintSparkConf(options, dsl)
 
   val HOST_ENDPOINT = FlintConfig("spark.datasource.flint.host")
     .datasourceOption()
@@ -333,7 +333,7 @@ object FlintSparkConf {
 /**
  * if no options provided, FlintSparkConf read configuration from SQLConf.
  */
-case class FlintSparkConf(properties: JMap[String, String]) extends Serializable {
+case class FlintSparkConf(properties: JMap[String, String], dsl: String = "") extends Serializable {
 
   @transient lazy val reader = new ConfigReader(properties)
 

@@ -81,7 +81,7 @@ class FlintReadOnlyTable(
     util.EnumSet.of(BATCH_READ)
 
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
-    FlintScanBuilder(tables, schema, flintSparkConf)
+    FlintScanBuilder(tables, schema, FlintSparkConf(flintSparkConf.properties, options.get("dsl")))
   }
 
   private def toSparkType(calciteType: RelDataType): DataType = {
