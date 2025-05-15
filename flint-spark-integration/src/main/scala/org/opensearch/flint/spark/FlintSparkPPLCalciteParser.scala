@@ -33,6 +33,7 @@ import scala.collection.JavaConverters._
 import org.apache.calcite.adapter.enumerable.{EnumerableConvention, EnumerableProject, EnumerableRel, EnumerableRules, EnumerableTableScan, RexToLixTranslator}
 import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.CalciteSchema
+import org.apache.calcite.plan.hep.{HepPlanner, HepProgramBuilder}
 import org.apache.calcite.plan.{RelOptTable, RelTrait, RelTraitDef}
 import org.apache.calcite.rel.{RelHomogeneousShuttle, RelNode}
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField, RelDataTypeFieldImpl}
@@ -46,7 +47,7 @@ import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.tools.{Frameworks, Programs}
 import org.opensearch.flint.core.storage.OpenSearchClientUtils
-import org.opensearch.flint.spark.calcite.{CalciteToSparkPlanTranslator, CustomRelToSqlConverter}
+import org.opensearch.flint.spark.calcite.{CalciteToSparkPlanTranslator, CustomSparkSqlDialect, OpenSearchIndexScanToTableFunctionRule}
 import org.opensearch.sql.ast.expression.QualifiedName
 import org.opensearch.sql.ast.statement.Query
 import org.opensearch.sql.calcite.{CalcitePlanContext, CalciteRelNodeVisitor}
@@ -176,12 +177,17 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
       sparkDf.explain(true)
       sparkDf.show
 
-      val sparkSqlFromCalcitePhy =
-        new CustomRelToSqlConverter(SparkSqlDialect.DEFAULT)
-          .visitRoot(optimizedRel)
-          .asStatement()
-          .toSqlString(SparkSqlDialect.DEFAULT)
-          .getSql
+      // Post processing before toSparkSql
+      // Create a HepPlanner with just our rule
+      val program = new HepProgramBuilder()
+        .addRuleInstance(new OpenSearchIndexScanToTableFunctionRule())
+        .build()
+
+      val planner2 = new HepPlanner(program)
+      planner2.setRoot(optimizedRel)
+      val calcitePlan2 = planner2.findBestExp()
+      val sparkSqlFromCalcitePhy = calcitePlanToSparkSql(calcitePlan2)
+
       logInfo(s"SparkSQL query from Calcite physical plan: $sparkSqlFromCalcitePhy")
       spark.sql(sparkSqlFromCalcitePhy).show
 
@@ -329,9 +335,10 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
   }
 
   private def calcitePlanToSparkSql(plan: RelNode): String = {
-    val converter = new RelToSqlConverter(SparkSqlDialect.DEFAULT)
+    val dialect = new CustomSparkSqlDialect()
+    val converter = new RelToSqlConverter(dialect)
     val result = converter.visitRoot(plan)
     val sqlNode = result.asStatement
-    sqlNode.toSqlString(SparkSqlDialect.DEFAULT).getSql
+    sqlNode.toSqlString(dialect).getSql
   }
 }

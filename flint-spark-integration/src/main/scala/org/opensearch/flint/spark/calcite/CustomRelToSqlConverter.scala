@@ -5,18 +5,17 @@
 
 package org.opensearch.flint.spark.calcite
 
-import org.apache.calcite.rel.RelNode
 import org.apache.calcite.rel.core.TableScan
 import org.apache.calcite.rel.rel2sql.{RelToSqlConverter, SqlImplementor}
 import org.apache.calcite.rel.rel2sql.SqlImplementor.Clause
 import org.apache.calcite.sql.`type`.{OperandTypes, ReturnTypes}
-import org.apache.calcite.sql.fun.SqlStdOperatorTable
-import org.apache.calcite.sql.{SqlBasicCall, SqlDialect, SqlFunction, SqlFunctionCategory, SqlIdentifier, SqlKind, SqlLiteral, SqlNode, SqlNodeList, SqlSelect}
+import org.apache.calcite.sql.{SqlDialect, SqlFunction, SqlFunctionCategory, SqlKind, SqlLiteral, SqlNodeList, SqlSelect}
 import org.apache.calcite.sql.parser.SqlParserPos
 import org.opensearch.sql.opensearch.storage.scan.CalciteEnumerableIndexScan
 
 import scala.collection.JavaConverters._
 
+@Deprecated
 class CustomRelToSqlConverter(dialect: SqlDialect) extends RelToSqlConverter(dialect) {
 
   override def visit(scan: TableScan): SqlImplementor#Result = scan match {
@@ -71,7 +70,6 @@ class CustomRelToSqlConverter(dialect: SqlDialect) extends RelToSqlConverter(dia
     )
 
     // Return the result with appropriate clauses
-    // result(select, JCollections.singletonList(Clause.FROM), indexScan, null)
     result(select, java.util.Collections.singletonList(Clause.FROM), indexScan, null)
   }
 }
