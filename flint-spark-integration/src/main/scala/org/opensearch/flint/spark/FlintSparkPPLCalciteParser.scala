@@ -47,7 +47,7 @@ import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.tools.{Frameworks, Programs}
 import org.opensearch.flint.core.storage.OpenSearchClientUtils
-import org.opensearch.flint.spark.calcite.{CalciteToSparkPlanTranslator, CustomSparkSqlDialect, OpenSearchIndexScanToTableFunctionRule}
+import org.opensearch.flint.spark.calcite.{CalciteFunctionToSparkUDFRule, CalciteToSparkPlanTranslator, CustomSparkSqlDialect, CalciteIndexScanToSparkUDTFRule}
 import org.opensearch.sql.ast.expression.QualifiedName
 import org.opensearch.sql.ast.statement.Query
 import org.opensearch.sql.calcite.{CalcitePlanContext, CalciteRelNodeVisitor}
@@ -180,7 +180,8 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
       // Post processing before toSparkSql
       // Create a HepPlanner with just our rule
       val program = new HepProgramBuilder()
-        .addRuleInstance(new OpenSearchIndexScanToTableFunctionRule())
+        .addRuleInstance(new CalciteFunctionToSparkUDFRule())
+        .addRuleInstance(new CalciteIndexScanToSparkUDTFRule())
         .build()
 
       val planner2 = new HepPlanner(program)

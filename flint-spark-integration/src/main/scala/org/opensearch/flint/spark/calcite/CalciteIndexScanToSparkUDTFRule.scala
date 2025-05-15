@@ -19,7 +19,7 @@ import java.util.{Collections => JCollections}
  * Rule that transforms CalciteEnumerableIndexScan to a table function scan
  * calling opensearch_query.
  */
-class OpenSearchIndexScanToTableFunctionRule extends RelOptRule(
+class CalciteIndexScanToSparkUDTFRule extends RelOptRule(
   RelOptRule.operand(classOf[CalciteEnumerableIndexScan], RelOptRule.none()),
   "OpenSearchIndexScanToTableFunctionRule"
 ) {
