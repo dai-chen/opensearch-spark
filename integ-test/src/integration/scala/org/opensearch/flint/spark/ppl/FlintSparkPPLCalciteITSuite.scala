@@ -6,10 +6,8 @@
 package org.opensearch.flint.spark.ppl
 
 import org.opensearch.flint.spark.FlintSparkSuite
-import org.opensearch.sql.calcite.udf.datetimeUDF.GetFormatFunction
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.types.{IntegerType, StringType}
 
 class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
@@ -121,6 +119,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     df.show
   }
 
+  /*
   test(s"Calcite-PPL basic query with UDF") {
     // Issue 1: hard to infer function signature and register by generic code
     // Issue 2: UDF performance penalty
@@ -138,6 +137,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     df.explain(true)
     df.show
   }
+   */
 
   test(s"Calcite-PPL basic query with overridden UDF") {
     spark.udf.register(

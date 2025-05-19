@@ -190,7 +190,7 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
       val sparkSqlFromCalcitePhy = calcitePlanToSparkSql(calcitePlan2)
 
       logInfo(s"SparkSQL query from Calcite physical plan: $sparkSqlFromCalcitePhy")
-      spark.sql(sparkSqlFromCalcitePhy).show
+      // spark.sql(sparkSqlFromCalcitePhy).show
 
       sparkParser.parsePlan(sqlText)
     } catch {

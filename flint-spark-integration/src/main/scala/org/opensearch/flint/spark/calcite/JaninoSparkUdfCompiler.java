@@ -50,6 +50,7 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+@Deprecated
 public class JaninoSparkUdfCompiler {
     private final RexBuilder rexBuilder;
 

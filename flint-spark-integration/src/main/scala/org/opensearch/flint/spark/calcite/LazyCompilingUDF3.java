@@ -9,6 +9,7 @@ import org.apache.spark.sql.api.java.UDF3;
 import org.codehaus.janino.SimpleCompiler;
 import java.util.concurrent.atomic.AtomicReference;
 
+@Deprecated
 public class LazyCompilingUDF3 implements UDF3<Object, Object, Object, Object> {
     private static final long serialVersionUID = 1L;
 

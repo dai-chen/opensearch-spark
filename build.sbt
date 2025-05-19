@@ -236,8 +236,8 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
       "com.github.sbt" % "junit-interface" % "0.13.3" % "test"),
     libraryDependencies ++= deps(sparkVersion),
     unmanagedJars in Compile ++= Seq(
-      baseDirectory.value / "lib" / "all-in-one-jar-3.0.0.0-beta1-SNAPSHOT.jar",
-      baseDirectory.value / "lib" / "all-in-one-opensearch-jar-3.0.0.0-beta1-SNAPSHOT.jar",
+      baseDirectory.value / "lib" / "all-in-one-jar-3.1.0.0-SNAPSHOT.jar",
+      baseDirectory.value / "lib" / "all-in-one-opensearch-jar-3.1.0.0-SNAPSHOT.jar",
     ),
     // ANTLR settings
     Antlr4 / antlr4Version := "4.8",
