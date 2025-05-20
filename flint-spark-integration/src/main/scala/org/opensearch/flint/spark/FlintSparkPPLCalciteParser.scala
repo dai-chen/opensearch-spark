@@ -175,7 +175,7 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
       val sparkDf = new CalciteToSparkPlanTranslator(spark).translate(optimizedRel)
       logInfo(s"Spark plan translated from Calcite plan:")
       sparkDf.explain(true)
-      sparkDf.show
+      // sparkDf.show
 
       // Post processing before toSparkSql
       // Create a HepPlanner with just our rule

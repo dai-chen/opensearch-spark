@@ -5,10 +5,13 @@
 
 package org.opensearch.flint.spark.ppl
 
+import org.apache.calcite.sql.validate.SqlUserDefinedFunction
 import org.opensearch.flint.spark.FlintSparkSuite
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.types.{IntegerType, StringType}
+import org.opensearch.sql.data.model.ExprValueUtils
+import org.opensearch.sql.expression.datetime.DateTimeFunctions
+import org.opensearch.sql.expression.function.PPLBuiltinOperators
 
 class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
 
@@ -119,10 +122,10 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     df.show
   }
 
-  /*
   test(s"Calcite-PPL basic query with UDF") {
     // Issue 1: hard to infer function signature and register by generic code
     // Issue 2: UDF performance penalty
+    /*
     spark.udf.register(
       "get_format", // SQL name
       (t: String, s: String) => { // Spark wrapper
@@ -132,12 +135,39 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
       },
       StringType // Spark return type
     )
+    */
 
+    spark.udf.register(
+      "get_format",
+      (`type`: String, format: String) => {
+        DateTimeFunctions.exprGetFormat(
+          ExprValueUtils.fromObjectValue(`type`),
+          ExprValueUtils.fromObjectValue(format)
+        ).valueForCalcite()
+      },
+      StringType
+    )
     val df = sql(s"source = $testTable | eval f = GET_FORMAT(DATE, 'USA') | fields f")
     df.explain(true)
     df.show
+
+    // Not sure how because each operator only has Implementor (lambda) for generating Linq expression at query time
+    val pplOperators = new PPLBuiltinOperators
+    val pplOperatorTable = pplOperators.init()
+    pplOperatorTable.getOperatorList.forEach { case pplOperator: SqlUserDefinedFunction =>
+      logError(
+        s"""
+           | PPL function: $pplOperator
+           | - name: ${pplOperator.getName}
+           | - params: ${pplOperator.getFunction.getParameters}
+           |""".stripMargin)
+    }
   }
-   */
+
+  private def registerGetFormat(): Unit = {
+
+
+  }
 
   test(s"Calcite-PPL basic query with overridden UDF") {
     spark.udf.register(
