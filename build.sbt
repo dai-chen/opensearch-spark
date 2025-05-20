@@ -76,8 +76,8 @@ ThisBuild / assemblyShadeRules := Seq(
 )
 
 lazy val commonSettings = Seq(
-  javacOptions ++= Seq("-source", "11"),
-  Compile / compile / javacOptions ++= Seq("-target", "11"),
+  javacOptions ++= Seq("-source", "17"),
+  Compile / compile / javacOptions ++= Seq("-target", "17"),
   // Scalastyle
   scalastyleConfig := (ThisBuild / scalastyleConfig).value,
   compileScalastyle := (Compile / scalastyle).toTask("").value,
@@ -234,7 +234,7 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
       "com.stephenn" %% "scalatest-json-jsonassert" % "0.2.5" % "test",
       "com.github.sbt" % "junit-interface" % "0.13.3" % "test"),
     libraryDependencies ++= deps(sparkVersion),
-    unmanagedJars in Compile += baseDirectory.value / "lib" / "all-in-one-jar-3.0.0.0-beta1-SNAPSHOT.jar",
+    unmanagedJars in Compile += baseDirectory.value / "lib" / "all-in-one-jar-3.1.0.0-beta1-SNAPSHOT.jar",
     // ANTLR settings
     Antlr4 / antlr4Version := "4.8",
     Antlr4 / antlr4PackageName := Some("org.opensearch.flint.spark.sql"),
@@ -272,6 +272,13 @@ lazy val integtest = (project in file("integ-test"))
       s"-DappJar=${(sparkSqlApplication / assembly).value.getAbsolutePath}",
       s"-DextensionJar=${(flintSparkIntegration / assembly).value.getAbsolutePath}",
       s"-DpplJar=${(pplSparkIntegration / assembly).value.getAbsolutePath}",
+      "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--add-opens=java.base/java.nio=ALL-UNNAMED",
+      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+      "--add-opens=java.base/sun.security.action=ALL-UNNAMED",
+      "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+      "--add-opens=java.base/java.lang=ALL-UNNAMED",
+      "--add-opens=java.base/java.util=ALL-UNNAMED",
     ),
     inConfig(IntegrationTest)(Defaults.testSettings ++ Seq(
       IntegrationTest / javaSource := baseDirectory.value / "src/integration/java",

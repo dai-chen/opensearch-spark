@@ -5,11 +5,11 @@
 
 package org.opensearch.flint.spark.ppl
 
-import org.opensearch.sql.calcite.udf.datetimeUDF.GetFormatFunction
-
 import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.types.{IntegerType, StringType}
+import org.opensearch.sql.data.model.ExprValueUtils
+import org.opensearch.sql.expression.datetime.DateTimeFunctions
 
 class FlintSparkPPLCalciteITSuite
     extends QueryTest
@@ -34,16 +34,15 @@ class FlintSparkPPLCalciteITSuite
   }
 
   test(s"test Calcite-PPL basic query with UDF") {
-    // Issue 1: hard to infer function signature and register by generic code
-    // Issue 2: UDF performance penalty
     spark.udf.register(
-      "get_format", // SQL name
-      (t: String, s: String) => { // Spark wrapper
-        // delegate straight back into your PPL function
-        val fmtFn = new GetFormatFunction()
-        fmtFn.eval(t, s).asInstanceOf[String]
+      "get_format",
+      (`type`: String, format: String) => {
+        DateTimeFunctions.exprGetFormat(
+          ExprValueUtils.fromObjectValue(`type`),
+          ExprValueUtils.fromObjectValue(format)
+        ).valueForCalcite()
       },
-      StringType // Spark return type
+      StringType
     )
 
     val df = sql(s"source = $testTable | eval f = GET_FORMAT(DATE, 'USA') | fields f")
