@@ -5,11 +5,12 @@
 
 package org.opensearch.flint.spark.ppl
 
+import org.opensearch.sql.data.model.ExprValueUtils
+import org.opensearch.sql.expression.datetime.DateTimeFunctions
+
 import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.types.{IntegerType, StringType}
-import org.opensearch.sql.data.model.ExprValueUtils
-import org.opensearch.sql.expression.datetime.DateTimeFunctions
 
 class FlintSparkPPLCalciteITSuite
     extends QueryTest
@@ -37,13 +38,13 @@ class FlintSparkPPLCalciteITSuite
     spark.udf.register(
       "get_format",
       (`type`: String, format: String) => {
-        DateTimeFunctions.exprGetFormat(
-          ExprValueUtils.fromObjectValue(`type`),
-          ExprValueUtils.fromObjectValue(format)
-        ).valueForCalcite()
+        DateTimeFunctions
+          .exprGetFormat(
+            ExprValueUtils.fromObjectValue(`type`),
+            ExprValueUtils.fromObjectValue(format))
+          .valueForCalcite()
       },
-      StringType
-    )
+      StringType)
 
     val df = sql(s"source = $testTable | eval f = GET_FORMAT(DATE, 'USA') | fields f")
     df.explain(true)

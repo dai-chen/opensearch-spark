@@ -32,15 +32,10 @@ import java.util.{Collections, List}
 import scala.collection.JavaConverters._
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
-import org.apache.calcite.adapter.enumerable.EnumerableConvention
-import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.CalciteSchema
 import org.apache.calcite.plan.{RelOptCluster, RelOptTable, RelTrait, RelTraitDef}
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField}
 import org.apache.calcite.rel.`type`.RelDataTypeFieldImpl
-import org.apache.calcite.rel.{RelHomogeneousShuttle, RelNode, RelShuttle}
-import org.apache.calcite.rel.core.TableScan
-import org.apache.calcite.rel.logical.LogicalTableScan
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider
 import org.apache.calcite.rel.rel2sql.RelToSqlConverter
 import org.apache.calcite.schema.{Table, TranslatableTable}
@@ -58,7 +53,6 @@ import org.opensearch.sql.ppl.parser.{AstBuilder, AstStatementBuilder}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalog.Database
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser._
@@ -122,20 +116,6 @@ class FlintSparkPPLCalciteParser(val spark: SparkSession, sparkParser: ParserInt
           |   PPL query: $pplText
           |   SQL query: $sqlText
           |""".stripMargin)
-
-      val shuttle = new RelHomogeneousShuttle() {
-        override def visit(scan: TableScan): RelNode = {
-          val table = scan.getTable
-          if (scan.isInstanceOf[LogicalTableScan] && Bindables.BindableTableScan.canHandle(
-              table)) {
-            // Always replace the LogicalTableScan with BindableTableScan
-            // because it's implementation does not require a "schema" as context.
-            return Bindables.BindableTableScan.create(scan.getCluster, table)
-          }
-          super.visit(scan)
-        }
-      }
-      // val rel2 = relNode.accept(shuttle)
 
       sparkParser.parsePlan(sqlText)
     } catch {
