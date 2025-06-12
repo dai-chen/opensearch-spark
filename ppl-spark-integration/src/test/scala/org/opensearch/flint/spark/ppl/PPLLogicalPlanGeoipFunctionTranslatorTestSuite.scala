@@ -8,10 +8,10 @@ package org.opensearch.flint.spark.ppl
 import java.util
 
 import org.opensearch.flint.spark.ppl.PlaneUtils.plan
-import org.opensearch.sql.expression.function.BuiltinFunctionName.{IP_TO_INT, IS_IPV4}
-import org.opensearch.sql.expression.function.SerializableUdf.visit
-import org.opensearch.sql.ppl.{CatalystPlanContext, CatalystQueryPlanVisitor}
-import org.opensearch.sql.ppl.utils.DataTypeTransformer.seq
+import org.opensearch.legacy.expression.function.BuiltinFunctionName.{IP_TO_INT, IS_IPV4}
+import org.opensearch.legacy.expression.function.SerializableUdf.visit
+import org.opensearch.legacy.ppl.{CatalystPlanContext, CatalystQueryPlanVisitor}
+import org.opensearch.legacy.ppl.utils.DataTypeTransformer.seq
 import org.scalatest.matchers.should.Matchers
 
 import org.apache.spark.SparkFunSuite

@@ -223,6 +223,11 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
     commonSettings,
     name := "flint-spark-integration",
     scalaVersion := scala212,
+    resolvers ++= Seq(
+      "Local Maven Repository" at "file://" + Path.userHome.absolutePath + "/.m2/repository",
+      "OpenSearch Snapshots" at "https://aws.oss.sonatype.org/content/repositories/snapshots/",
+      "JitPack" at "https://jitpack.io"
+    ),
     libraryDependencies ++= Seq(
       "com.amazonaws" % "aws-java-sdk" % "1.12.397" % "provided"
         exclude ("com.fasterxml.jackson.core", "jackson-databind"),
@@ -234,7 +239,10 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
       "org.mockito" % "mockito-inline" % "4.6.0" % "test",
       "com.stephenn" %% "scalatest-json-jsonassert" % "0.2.5" % "test",
       "com.github.seancfoley" % "ipaddress" % "5.5.1",
-      "com.github.sbt" % "junit-interface" % "0.13.3" % "test"),
+      "com.github.sbt" % "junit-interface" % "0.13.3" % "test",
+      "org.opensearch.sql" % "unified-query-ppl" % "2.19.3.0-SNAPSHOT"
+        exclude("org.opensearch.sql", "unified-query-protocol")
+        exclude("org.opensearch.sql", "unified-query-opensearch")),
     libraryDependencies ++= deps(sparkVersion),
     // ANTLR settings
     Antlr4 / antlr4Version := "4.8",

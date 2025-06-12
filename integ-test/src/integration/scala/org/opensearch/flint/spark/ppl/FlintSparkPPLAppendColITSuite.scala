@@ -5,13 +5,13 @@
 
 package org.opensearch.flint.spark.ppl
 
-import org.opensearch.sql.ppl.utils.SortUtils
+import org.opensearch.legacy.ppl.utils.SortUtils
 
 import org.apache.spark.sql.{QueryTest, Row}
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction, UnresolvedRelation, UnresolvedStar}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Ascending, Ascending$, CurrentRow, EqualTo, Literal, RowFrame, RowNumber, SortOrder, SpecifiedWindowFrame, UnboundedPreceding, WindowExpression, WindowSpecDefinition}
 import org.apache.spark.sql.catalyst.plans.FullOuter
-import org.apache.spark.sql.catalyst.plans.logical.{Project, _}
+import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.types.DataTypes
 

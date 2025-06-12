@@ -14,10 +14,7 @@ import org.apache.spark.sql.flint.config.FlintSparkConf.OPTIMIZER_RULE_ENABLED
 trait FlintPPLSuite extends FlintSparkSuite {
   override protected def sparkConf: SparkConf = {
     val conf = super.sparkConf
-      .set(
-        "spark.sql.extensions",
-        List(classOf[FlintPPLSparkExtensions].getName, classOf[FlintSparkExtensions].getName)
-          .mkString(", "))
+      .set("spark.sql.extensions", List(classOf[FlintSparkExtensions].getName).mkString(", "))
       .set(OPTIMIZER_RULE_ENABLED.key, "false")
     conf
   }
