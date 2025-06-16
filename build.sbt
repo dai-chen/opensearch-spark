@@ -100,7 +100,7 @@ lazy val commonSettings = Seq(
 
 // running `scalafmtAll` includes all subprojects under root
 lazy val root = (project in file("."))
-  .aggregate(flintCommons, flintCore, flintSparkIntegration, pplSparkIntegration, sparkSqlApplication, integtest)
+  .aggregate(flintCommons, flintCore, flintSparkIntegration, pplSparkIntegration, unifiedQueryIntegration, sparkSqlApplication, integtest)
   .disablePlugins(AssemblyPlugin)
   .settings(name := "flint", publish / skip := true)
 
@@ -299,12 +299,56 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
     assembly / test := (Test / test).value
   )
 
+lazy val unifiedQueryIntegration = (project in file("unified-query-integration"))
+  .enablePlugins(AssemblyPlugin)
+  .settings(
+    commonSettings,
+    name := "unified-query-integration",
+    scalaVersion := scala212,
+    resolvers ++= Seq(
+      "Local Maven Repository" at "file://" + Path.userHome.absolutePath + "/.m2/repository",
+      "OpenSearch Snapshots" at "https://aws.oss.sonatype.org/content/repositories/snapshots/",
+      "JitPack" at "https://jitpack.io" // TODO: exclude okhttp which requires this?
+    ),
+    libraryDependencies ++= Seq(
+      "org.scalactic" %% "scalactic" % "3.2.15" % "test",
+      "org.scalatest" %% "scalatest" % "3.2.15" % "test",
+      "org.scalatest" %% "scalatest-flatspec" % "3.2.15" % "test",
+      "org.scalatestplus" %% "mockito-4-6" % "3.2.15.0" % "test",
+      "com.github.sbt" % "junit-interface" % "0.13.3" % "test",
+      "org.opensearch.query" % "unified-query-api" % "2.19.3.0-SNAPSHOT"
+        exclude("org.opensearch.query", "unified-query-protocol")
+        exclude("org.opensearch.query", "unified-query-opensearch")),
+    libraryDependencies ++= deps(sparkVersion),
+    // Assembly settings
+    assemblyPackageScala / assembleArtifact := false,
+    assembly / assemblyOption ~= {
+      _.withIncludeScala(false)
+    },
+    assembly / assemblyMergeStrategy := {
+      case PathList(ps @ _*) if ps.last endsWith ("module-info.class") =>
+        MergeStrategy.discard
+      case PathList("module-info.class") => MergeStrategy.discard
+      case PathList("META-INF", "versions", xs @ _, "module-info.class") =>
+        MergeStrategy.discard
+      case x =>
+        val oldStrategy = (assembly / assemblyMergeStrategy).value
+        oldStrategy(x)
+    },
+    assembly / test := (Test / test).value)
+
 lazy val IntegrationTest = config("it") extend Test
 lazy val AwsIntegrationTest = config("aws-it") extend Test
 
 // Test assembly package with integration test.
 lazy val integtest = (project in file("integ-test"))
-  .dependsOn(flintCommons % "test->test", flintSparkIntegration % "test->test", pplSparkIntegration % "test->test", sparkSqlApplication % "test->test")
+  .dependsOn(
+    flintCommons % "test->test",
+    flintSparkIntegration % "test->test",
+    pplSparkIntegration % "test->test",
+    unifiedQueryIntegration % "test->test",
+    sparkSqlApplication % "test->test"
+  )
   .configs(IntegrationTest, AwsIntegrationTest)
   .settings(
     commonSettings,
