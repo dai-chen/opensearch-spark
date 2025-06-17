@@ -316,7 +316,7 @@ lazy val unifiedQueryIntegration = (project in file("unified-query-integration")
       "org.scalatest" %% "scalatest-flatspec" % "3.2.15" % "test",
       "org.scalatestplus" %% "mockito-4-6" % "3.2.15.0" % "test",
       "com.github.sbt" % "junit-interface" % "0.13.3" % "test",
-      "org.opensearch.query" % "unified-query-api" % "2.19.3.0-SNAPSHOT"
+      "org.opensearch.query" % "unified-query-api" % "2.19.0.0-SNAPSHOT"
         exclude("org.opensearch.query", "unified-query-protocol")
         exclude("org.opensearch.query", "unified-query-opensearch")),
     libraryDependencies ++= deps(sparkVersion),
