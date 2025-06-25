@@ -306,9 +306,8 @@ lazy val unifiedQueryIntegration = (project in file("unified-query-integration")
     name := "unified-query-integration",
     scalaVersion := scala212,
     resolvers ++= Seq(
-      "Local Maven Repository" at "file://" + Path.userHome.absolutePath + "/.m2/repository",
       "OpenSearch Snapshots" at "https://aws.oss.sonatype.org/content/repositories/snapshots/",
-      "JitPack" at "https://jitpack.io" // TODO: exclude okhttp which requires this?
+      "JitPack" at "https://jitpack.io" // TODO: exclude okhttp-aws-signer which requires this
     ),
     libraryDependencies ++= Seq(
       "org.scalactic" %% "scalactic" % "3.2.15" % "test",
@@ -398,7 +397,10 @@ lazy val integtest = (project in file("integ-test"))
       "org.apache.iceberg" %% s"iceberg-spark-runtime-$sparkMinorVersion" % icebergVersion % "test",
       "org.scala-lang.modules" %% "scala-collection-compat" % "2.11.0" % "test"),
     libraryDependencies ++= deps(sparkVersion),
-    Test / fullClasspath ++= Seq((flintSparkIntegration / assembly).value, (pplSparkIntegration / assembly).value,
+    Test / fullClasspath ++= Seq(
+      (unifiedQueryIntegration / assembly).value,
+      (flintSparkIntegration / assembly).value,
+      (pplSparkIntegration / assembly).value,
       (sparkSqlApplication / assembly).value
     ),
     IntegrationTest / dependencyClasspath ++= (Test / dependencyClasspath).value,
