@@ -7,11 +7,11 @@ package org.opensearch.flint.spark.ppl
 
 import java.util
 
-import org.opensearch.sql.expression.function.BuiltinFunctionName.JSON_APPEND
-import org.opensearch.sql.expression.function.BuiltinFunctionName.JSON_DELETE
-import org.opensearch.sql.expression.function.BuiltinFunctionName.JSON_EXTEND
-import org.opensearch.sql.expression.function.BuiltinFunctionName.JSON_SET
-import org.opensearch.sql.expression.function.SerializableUdf.visit
+import org.opensearch.flintsql.expression.function.BuiltinFunctionName.JSON_APPEND
+import org.opensearch.flintsql.expression.function.BuiltinFunctionName.JSON_DELETE
+import org.opensearch.flintsql.expression.function.BuiltinFunctionName.JSON_EXTEND
+import org.opensearch.flintsql.expression.function.BuiltinFunctionName.JSON_SET
+import org.opensearch.flintsql.expression.function.SerializableUdf.visit
 
 import org.apache.spark.sql.{AnalysisException, QueryTest, Row}
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction, UnresolvedRelation, UnresolvedStar}

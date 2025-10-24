@@ -9,10 +9,10 @@ import scala.collection.mutable.WrappedArray;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.opensearch.sql.expression.function.SerializableUdf.jsonAppendFunction;
-import static org.opensearch.sql.expression.function.SerializableUdf.jsonExtendFunction;
-import static org.opensearch.sql.expression.function.SerializableUdf.jsonDeleteFunction;
-import static org.opensearch.sql.expression.function.SerializableUdf.jsonSetFunction;
+import static org.opensearch.flintsql.expression.function.SerializableUdf.jsonAppendFunction;
+import static org.opensearch.flintsql.expression.function.SerializableUdf.jsonExtendFunction;
+import static org.opensearch.flintsql.expression.function.SerializableUdf.jsonDeleteFunction;
+import static org.opensearch.flintsql.expression.function.SerializableUdf.jsonSetFunction;
 
 public class SerializableJsonUdfTest {
 

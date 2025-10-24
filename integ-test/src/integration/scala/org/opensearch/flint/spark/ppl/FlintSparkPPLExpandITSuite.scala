@@ -8,7 +8,7 @@ import java.nio.file.Files
 
 import scala.collection.mutable
 
-import org.opensearch.sql.ppl.utils.DataTypeTransformer.seq
+import org.opensearch.flintsql.ppl.utils.DataTypeTransformer.seq
 
 import org.apache.spark.sql.{QueryTest, Row}
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction, UnresolvedRelation, UnresolvedStar}
