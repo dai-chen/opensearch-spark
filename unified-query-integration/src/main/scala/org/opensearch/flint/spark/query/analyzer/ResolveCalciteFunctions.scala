@@ -68,16 +68,17 @@ case class ResolveCalciteFunctions(spark: SparkSession) extends Rule[LogicalPlan
 
     try {
       val pplFunc = pplFuncOpt.get()
+      val normalizedChildren = CalciteFunctionResolver.normalizeArguments(pplFunc, children)
 
       // Convert Spark children to RexNodes
-      val childRexNodes = children.map(childToRexNode).toArray
+      val childRexNodes = normalizedChildren.map(childToRexNode).toArray
 
       // Use PPLFuncImpTable to resolve the function to a RexCall
       // This handles all the function signature matching and operator selection
       val rexCall = pplFuncImpTable.resolve(rexBuilder, pplFunc, childRexNodes: _*)
 
       // Wrap in CalciteRexExpression
-      Some(CalciteRexExpression(rexCall, children, calciteContext))
+      Some(CalciteRexExpression(rexCall, normalizedChildren, calciteContext))
     } catch {
       case e: Exception =>
         // If we can't create the RexCall, let Spark handle it
@@ -98,9 +99,9 @@ case class ResolveCalciteFunctions(spark: SparkSession) extends Rule[LogicalPlan
         val calciteValue = CalciteTypeConverter.sparkToCalciteValue(value, dataType)
         rexBuilder.makeLiteral(calciteValue, calciteType, true)
 
-      case CalciteRexExpression(rexNode, _, _) =>
+      case expr: CalciteRexExpression =>
         // Already a RexNode, return as-is
-        rexNode
+        expr.getRexNode
 
       case other if other.resolved =>
         // For resolved expressions (like AttributeReference), create an input reference

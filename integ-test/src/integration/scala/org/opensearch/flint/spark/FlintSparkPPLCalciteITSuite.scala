@@ -21,6 +21,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
 
   private val osCatalogName = "dev"
 
+  /*
   override def sparkConf: SparkConf = {
     super.sparkConf
       // Register your dev catalog
@@ -33,6 +34,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
       .set(s"spark.sql.catalog.$osCatalogName.opensearch.write.refresh_policy", "wait_for")
       .set("spark.sql.session.timeZone", "UTC")
   }
+   */
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -146,32 +148,28 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     }
   }
 
-  test("test PPL function resolved through Calcite - UPPER") {
-    // Create a simple test table
-    sql("CREATE TABLE test_calcite_func (name STRING, age INT) USING JSON")
-    sql("INSERT INTO test_calcite_func VALUES ('alice', 25), ('bob', 30), ('charlie', 35)")
+  test("test PPL function resolved through Calcite - JSON_DELETE") {
+    sql("CREATE TABLE test_calcite_func (name STRING, data STRING) USING JSON")
+    sql("""INSERT INTO test_calcite_func VALUES
+        ('alice', '{"age":25,"city":"NYC"}'),
+        ('bob', '{"age":30,"city":"LA"}')""")
 
-    // Use UPPER function which should be resolved through Calcite via CalciteRexExpression
     val result = spark.sql("""
-        | source = spark_catalog.default.test_calcite_func
-        | | eval upper_name = upper(name)
-        | | fields name, upper_name, age
-        |""".stripMargin)
+                             | source = spark_catalog.default.test_calcite_func
+                             | | where name = 'alice'
+                             | | eval cleaned_data = json_delete(data, array('age'))
+                             | | fields name, cleaned_data
+                             |""".stripMargin)
 
     result.explain(true)
 
-    // Verify the results
     val rows = result.collect()
-    assert(rows.length == 3)
+    // Verify JSON_DELETE removed the 'age' key through Calcite
+    assert(rows(0).getAs[String]("cleaned_data") contains "city")
+    assert(!(rows(0).getAs[String]("cleaned_data") contains "age"))
 
-    // Check that UPPER function worked correctly
-    val names = rows.map(row => row.getAs[String]("name")).toSet
-    val upperNames = rows.map(row => row.getAs[String]("upper_name")).toSet
+    result.show
 
-    assert(names == Set("alice", "bob", "charlie"))
-    assert(upperNames == Set("ALICE", "BOB", "CHARLIE"))
-
-    // Cleanup
     sql("DROP TABLE test_calcite_func")
   }
 }

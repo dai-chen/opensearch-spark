@@ -40,19 +40,23 @@ class CalciteExecutionContext extends Logging with Serializable {
       // Create RexExecutorImpl which uses Janino compiler for code generation
       val rexExecutor = new RexExecutorImpl(dataContext)
 
-      // Create a mutable list for the reduction
+      // Prepare expression and destination for reduction
       val exprList = new java.util.ArrayList[RexNode]()
       exprList.add(rexNode)
+      val reducedValues = new java.util.ArrayList[RexNode]()
 
-      // Reduce/evaluate the RexNode using the compiled code
-      // This will generate Java code, compile it, and execute it
-      // The reduce method modifies the list in place
-      rexExecutor.reduce(rexBuilder, exprList, null)
+      // Reduce/evaluate the RexNode using the compiled code. The reducedValues list receives the
+      // evaluated literals when reduction succeeds; otherwise Calcite leaves them empty and we fall
+      // back to the original node.
+      rexExecutor.reduce(rexBuilder, exprList, reducedValues)
 
-      // Get the result - reduced expressions contain the evaluated result
-      val result = if (exprList != null && exprList.size() > 0) {
-        val reducedNode = exprList.get(0)
-        // If the result is a literal, extract its value
+      // Get the reduced value if present; otherwise use the original expression.
+      val reducedNode =
+        if (!reducedValues.isEmpty) reducedValues.get(0)
+        else exprList.get(0)
+
+      // If the result is a literal, extract its value
+      val result =
         if (reducedNode.isInstanceOf[org.apache.calcite.rex.RexLiteral]) {
           val literal = reducedNode.asInstanceOf[org.apache.calcite.rex.RexLiteral]
           literal.getValue
@@ -61,9 +65,6 @@ class CalciteExecutionContext extends Logging with Serializable {
           throw new RuntimeException(
             s"Expected literal result after reduction, got: ${reducedNode.getClass}")
         }
-      } else {
-        null
-      }
 
       // Convert result back to Spark format
       CalciteTypeConverter.calciteToSparkValue(result, resultDataType)
