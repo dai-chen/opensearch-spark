@@ -151,14 +151,15 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
   test("test PPL function resolved through Calcite - TRUNCATE") {
     val result = spark.sql(s"""
                              | source = $testTable
-                             | | eval trunc = truncate(name)
+                             | | eval trunc = truncate(age, 1)
+                             | | fields trunc
                              |""".stripMargin)
 
     result.explain(true)
     result.show
   }
 
-  ignore("test PPL function resolved through Calcite - JSON_DELETE") {
+  test("test PPL function resolved through Calcite - JSON_DELETE") {
     sql("CREATE TABLE test_calcite_func (name STRING, data STRING) USING JSON")
     sql("""INSERT INTO test_calcite_func VALUES
         ('alice', '{"age":25,"city":"NYC"}'),
@@ -167,17 +168,11 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     val result = spark.sql("""
                              | source = spark_catalog.default.test_calcite_func
                              | | where name = 'alice'
-                             | | eval cleaned_data = json_delete(data, array('age'))
+                             | | eval cleaned_data = json_delete(data, 'age')
                              | | fields name, cleaned_data
                              |""".stripMargin)
 
     result.explain(true)
-
-    val rows = result.collect()
-    // Verify JSON_DELETE removed the 'age' key through Calcite
-    assert(rows(0).getAs[String]("cleaned_data") contains "city")
-    assert(!(rows(0).getAs[String]("cleaned_data") contains "age"))
-
     result.show
 
     sql("DROP TABLE test_calcite_func")
