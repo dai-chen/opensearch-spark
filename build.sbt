@@ -306,8 +306,14 @@ lazy val unifiedQueryIntegration = (project in file("unified-query-integration")
     name := "unified-query-integration",
     scalaVersion := scala212,
     resolvers ++= Seq(
-      "OpenSearch Snapshots" at "https://aws.oss.sonatype.org/content/repositories/snapshots/",
+      // "OpenSearch Snapshots" at "https://aws.oss.sonatype.org/content/repositories/snapshots/",
+      "OpenSearch Snapshots" at "https://ci.opensearch.org/ci/dbc/snapshots/maven/",
       "JitPack" at "https://jitpack.io" // TODO: exclude okhttp-aws-signer which requires this
+    ),
+    // Force all Jackson dependencies to use Spark's version to avoid conflicts
+    dependencyOverrides ++= Seq(
+      "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonVersion,
+      "com.fasterxml.jackson.dataformat" % "jackson-dataformat-yaml" % jacksonVersion
     ),
     libraryDependencies ++= Seq(
       "org.scalactic" %% "scalactic" % "3.2.15" % "test",
@@ -315,9 +321,22 @@ lazy val unifiedQueryIntegration = (project in file("unified-query-integration")
       "org.scalatest" %% "scalatest-flatspec" % "3.2.15" % "test",
       "org.scalatestplus" %% "mockito-4-6" % "3.2.15.0" % "test",
       "com.github.sbt" % "junit-interface" % "0.13.3" % "test",
+      // TODO: move ExtendedRelSerializer to core module
+      "org.opensearch.query" % "unified-query-opensearch" % "2.19.0.0-SNAPSHOT"
+        excludeAll(
+          ExclusionRule(organization = "com.fasterxml.jackson.core"),
+          ExclusionRule(organization = "com.fasterxml.jackson.dataformat"),
+          ExclusionRule(organization = "com.fasterxml.jackson.module"),
+          ExclusionRule(organization = "com.fasterxml.jackson.jaxrs"),
+          ExclusionRule(organization = "org.opensearch")),
       "org.opensearch.query" % "unified-query-api" % "2.19.0.0-SNAPSHOT"
-        exclude("org.opensearch.query", "unified-query-protocol")
-        exclude("org.opensearch.query", "unified-query-opensearch")),
+        excludeAll(
+          ExclusionRule(organization = "com.fasterxml.jackson.core"),
+          ExclusionRule(organization = "com.fasterxml.jackson.dataformat"),
+          ExclusionRule(organization = "com.fasterxml.jackson.module"),
+          ExclusionRule(organization = "com.fasterxml.jackson.jaxrs"),
+          ExclusionRule(organization = "org.opensearch"))
+        exclude("org.opensearch.query", "unified-query-protocol")),
     libraryDependencies ++= deps(sparkVersion),
     // Assembly settings
     assemblyPackageScala / assembleArtifact := false,
