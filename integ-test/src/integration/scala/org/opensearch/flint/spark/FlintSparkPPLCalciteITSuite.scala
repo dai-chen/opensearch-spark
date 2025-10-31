@@ -148,6 +148,18 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     }
   }
 
+  test("test PPL function resolved through Calcite - PPL & Spark function mix use") {
+    val result = spark.sql(s"""
+                              | source = $testTable
+                              | | eval trunc = truncate(abs(age), 1)
+                              | | fields trunc
+                              |""".stripMargin)
+
+    result.explain(true)
+    result.explain("codegen")
+    result.show
+  }
+
   test("test PPL function resolved through Calcite - TRUNCATE") {
     val result = spark.sql(s"""
                              | source = $testTable

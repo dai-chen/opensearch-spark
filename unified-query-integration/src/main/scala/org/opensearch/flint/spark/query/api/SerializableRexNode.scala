@@ -51,8 +51,6 @@ class SerializableRexNode(@transient private var _rexNode: RexNode) extends Seri
   @transient private lazy val relJsonSerializer: RelJsonSerializer = new RelJsonSerializer(
     cluster)
   @transient private lazy val rowType: RelDataType = extractInputSchema(_rexNode)
-  @transient private lazy val evaluationFunction: Function1[DataContext, Array[AnyRef]] =
-    createEvaluationFunction()
 
   def getRexNode: RexNode = _rexNode
 
@@ -61,7 +59,15 @@ class SerializableRexNode(@transient private var _rexNode: RexNode) extends Seri
       new SerializableRexNode.InMemoryDataContext(
         buildInputValueMap(inputs, rowType),
         typeFactory)
-    val result = evaluationFunction.apply(dataContext)
+    val getter = new SerializableRexNode.DefaultInputGetter(typeFactory, rowType)
+    val code = SerializableRexNode.translate(
+      rexBuilder,
+      java.util.Collections.singletonList(_rexNode),
+      getter,
+      rowType)
+    val executor = new RexExecutable(code, "UnifiedFunctionRexExecutable")
+    executor.setDataContext(dataContext)
+    val result = executor.execute()
     if (result == null || result.isEmpty) null else result(0)
   }
 
@@ -76,17 +82,6 @@ class SerializableRexNode(@transient private var _rexNode: RexNode) extends Seri
     }
     valueMap.put(DataContext.Variable.UTC_TIMESTAMP.camelName, System.currentTimeMillis())
     valueMap
-  }
-
-  private def createEvaluationFunction(): Function1[DataContext, Array[AnyRef]] = {
-    val getter = new SerializableRexNode.DefaultInputGetter(typeFactory, rowType)
-    val code = SerializableRexNode.translate(
-      rexBuilder,
-      java.util.Collections.singletonList(_rexNode),
-      getter,
-      rowType)
-    new RexExecutable(code, "UnifiedFunctionRexExecutable").getFunction
-      .asInstanceOf[Function1[DataContext, Array[AnyRef]]]
   }
 
   /**

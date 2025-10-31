@@ -44,6 +44,10 @@ class UnifiedFunctionCalciteAdapter(private val serializableRexNode: Serializabl
         throw new RuntimeException(s"Failed to evaluate Calcite expression: ${e.getMessage}", e)
     }
   }
+
+  override def toString: String = {
+    serializableRexNode.getRexNode.toString
+  }
 }
 
 object UnifiedFunctionCalciteAdapter {

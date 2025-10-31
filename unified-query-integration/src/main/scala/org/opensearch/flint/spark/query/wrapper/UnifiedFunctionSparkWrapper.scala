@@ -23,11 +23,6 @@ case class UnifiedFunctionSparkWrapper(
     with CodegenFallback
     with NonSQLExpression {
 
-  require(
-    unifiedFunction.inputTypes.size == children.size,
-    s"UnifiedFunction expected ${unifiedFunction.inputTypes.size} arguments, " +
-      s"but Spark wrapper received ${children.size}")
-
   override def dataType: DataType =
     CalciteTypeConverter.toSparkType(unifiedFunction.returnType)
 
@@ -45,7 +40,7 @@ case class UnifiedFunctionSparkWrapper(
     CalciteTypeConverter.calciteToSparkValue(calciteResult, dataType)
   }
 
-  override def toString: String = s"UnifiedFunction(${unifiedFunction.getClass.getSimpleName})"
+  override def toString: String = s"UnifiedFunction($unifiedFunction(${children.mkString(",")}))"
 
   override protected def withNewChildrenInternal(
       newChildren: IndexedSeq[Expression]): Expression = {
