@@ -65,8 +65,8 @@ object UnifiedFunctionRepository extends Logging {
           val rexNode =
             PPLFuncImpTable.INSTANCE.resolve(rexBuilder, functionName, rexNodes.toArray: _*)
 
-          // Wrap in UnifiedFunctionCalciteAdapter and then UnifiedFunctionSparkWrapper
-          UnifiedFunctionSparkWrapper(UnifiedFunctionCalciteAdapter(rexNode), children)
+          // Directly wrap RexNode in UnifiedFunctionSparkWrapper
+          UnifiedFunctionSparkWrapper(rexNode, children)
         }
         (identifier, info, builder)
       }
