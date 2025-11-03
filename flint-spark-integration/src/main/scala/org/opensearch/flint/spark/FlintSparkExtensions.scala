@@ -8,7 +8,7 @@ package org.opensearch.flint.spark
 import org.opensearch.common.geo.GeoPoint
 import org.opensearch.flint.spark.function.TumbleFunction
 import org.opensearch.flint.spark.query.UnifiedQueryParser
-import org.opensearch.flint.spark.query.analyzer.SafeCalciteFunctionRegistration
+import org.opensearch.flint.spark.query.api.UnifiedFunctionRepository
 import org.opensearch.flint.spark.query.calcite.CalciteExecutionContext
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
 import org.opensearch.flint.spark.udt.{IPAddress, IPAddressUDT}
@@ -29,11 +29,8 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) with Logging
       new UnifiedQueryParser(spark, new FlintSparkSqlParser(parser))
     }
 
-    // Get safe function descriptions and register them
-    val calciteContext = CalciteExecutionContext.getOrCreate()
-    val safeDescriptions =
-      SafeCalciteFunctionRegistration.getSafeDescriptions(calciteContext)
-    safeDescriptions.foreach { description =>
+    // Get function descriptions and register them
+    UnifiedFunctionRepository.loadFunctions().foreach { description =>
       extensions.injectFunction(description)
     }
 

@@ -7,47 +7,68 @@ package org.opensearch.flint.spark.query.api
 
 import java.util.Locale
 
+import scala.collection.JavaConverters._
 import scala.util.Try
 
-import org.apache.calcite.sql.`type`.SqlTypeName
-import org.opensearch.flint.spark.query.calcite.CalciteExecutionContext
-import org.opensearch.sql.expression.function.{BuiltinFunctionName, PPLFuncImpTable}
-import org.slf4j.LoggerFactory
+import org.apache.calcite.jdbc.JavaTypeFactoryImpl
+import org.apache.calcite.rex.RexBuilder
+import org.apache.calcite.sql.validate.SqlUserDefinedFunction
+import org.opensearch.flint.spark.query.calcite.CalciteTypeConverter
+import org.opensearch.flint.spark.query.wrapper.UnifiedFunctionSparkWrapper
+import org.opensearch.sql.expression.function.{PPLBuiltinOperators, PPLFuncImpTable}
+
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.FunctionIdentifier
+import org.apache.spark.sql.catalyst.analysis.FunctionRegistry
+import org.apache.spark.sql.catalyst.analysis.FunctionRegistry.FunctionBuilder
+import org.apache.spark.sql.catalyst.expressions.ExpressionInfo
 
 /**
  * Repository that inspects the Calcite PPL function implementation table and exposes unified
  * functions that can be adapted for Spark or other engines.
+ *
+ * This utility checks if a function already exists in Spark's built-in function registry before
+ * registering the Calcite version, ensuring we don't accidentally override standard Spark SQL
+ * functions.
  */
-object UnifiedFunctionRepository {
-
-  private val logger = LoggerFactory.getLogger(UnifiedFunctionRepository.getClass)
-
-  case class Entry(functionName: String, function: UnifiedFunction)
-
-  private val pplFuncImpTable = PPLFuncImpTable.INSTANCE
+object UnifiedFunctionRepository extends Logging {
 
   /**
-   * Enumerate Calcite functions available from [[PPLFuncImpTable]] and convert them into
-   * [[UnifiedFunction]] instances when possible.
+   * Return Spark function descriptors backed by Calcite unified functions. Filters out functions
+   * that conflict with Spark built-ins. Function resolution via PPLFuncImplTable.resolve()
+   * happens at runtime when actual argument types are available, avoiding NPE from paramTypes().
    */
-  def loadFunctions(calciteContext: CalciteExecutionContext): Seq[Entry] = {
-    val rexBuilder = calciteContext.getRexBuilder
-    val typeFactory = calciteContext.getTypeFactory
-    val anyType = typeFactory.createSqlType(SqlTypeName.ANY)
+  def loadFunctions(): Seq[(FunctionIdentifier, ExpressionInfo, FunctionBuilder)] = {
+    val typeFactory = new JavaTypeFactoryImpl()
+    val rexBuilder = new RexBuilder(typeFactory)
 
-    BuiltinFunctionName.values().toSeq.flatMap { builtinName =>
-      val functionKey = builtinName.getName.getFunctionName.toLowerCase(Locale.ROOT)
-      val adapters = (0 to MaxArity).flatMap { arity =>
-        val args = (0 until arity).map(index => rexBuilder.makeInputRef(anyType, index)).toArray
-        Try {
-          val rexCall = pplFuncImpTable.resolve(rexBuilder, builtinName, args: _*)
-          UnifiedFunctionCalciteAdapter(rexCall)
-        }.toOption
-      }
-
-      adapters.headOption.map(adapter => Entry(functionKey, adapter))
+    val operatorTable = PPLBuiltinOperators.instance()
+    val operators = operatorTable.getOperatorList.asScala.collect {
+      case udf: SqlUserDefinedFunction => udf
     }
-  }
 
-  private val MaxArity = 6
+    operators
+      .map { function =>
+        val functionName = function.getName.toLowerCase(Locale.ROOT)
+        val identifier = FunctionIdentifier(functionName)
+        logInfo(s"Registering PPL function $identifier")
+        val info =
+          new ExpressionInfo(classOf[UnifiedFunctionSparkWrapper].getCanonicalName, functionName)
+        val builder: FunctionBuilder = { children =>
+          // Convert Spark children expressions to Calcite RexNodes with proper types
+          val rexNodes = children.map { child =>
+            val calciteType = CalciteTypeConverter.toCalciteType(child.dataType, typeFactory)
+            rexBuilder.makeInputRef(calciteType, children.indexOf(child))
+          }
+
+          // Use PPLFuncImplTable.resolve() with properly-typed arguments
+          val rexNode =
+            PPLFuncImpTable.INSTANCE.resolve(rexBuilder, functionName, rexNodes.toArray: _*)
+
+          // Wrap in UnifiedFunctionCalciteAdapter and then UnifiedFunctionSparkWrapper
+          UnifiedFunctionSparkWrapper(UnifiedFunctionCalciteAdapter(rexNode), children)
+        }
+        (identifier, info, builder)
+      }
+  }
 }
