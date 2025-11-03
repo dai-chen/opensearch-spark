@@ -48,7 +48,17 @@ case class UnifiedFunctionSparkWrapper(
   }
   @transient private lazy val relJsonSerializer: RelJsonSerializer = new RelJsonSerializer(
     cluster)
-  @transient private lazy val rowType: RelDataType = extractInputSchema(asRexCall(_rexNode))
+  @transient private lazy val rowType: RelDataType = extractInputSchema(_rexNode)
+
+  // Cache the compiled executor - expensive to create as it generates and compiles Java code
+  @transient private lazy val rexExecutor = {
+    val executor = RexExecutorImpl.getExecutable(
+      rexBuilder,
+      java.util.Collections.singletonList(_rexNode),
+      rowType)
+    logInfo(s"Generate code: ${executor.getSource}")
+    executor
+  }
 
   override def dataType: DataType = CalciteTypeConverter.toSparkType(_rexNode.getType)
 
@@ -67,18 +77,11 @@ case class UnifiedFunctionSparkWrapper(
   }
 
   private def evaluateRexNode(inputs: Seq[Any]): Any = {
-    val rexCall = asRexCall(_rexNode)
     val dataContext = createDataContext(inputs)
-    val executor = RexExecutorImpl.getExecutable(
-      rexBuilder,
-      java.util.Collections.singletonList(rexCall),
-      rowType)
-    executor.setDataContext(dataContext)
-
-    logInfo(s"Generate code: ${executor.getSource}")
     logInfo(s"Data context: $dataContext")
 
-    val result = executor.execute()
+    rexExecutor.setDataContext(dataContext)
+    val result = rexExecutor.execute()
     if (result == null || result.isEmpty) null else result(0)
   }
 
@@ -89,14 +92,7 @@ case class UnifiedFunctionSparkWrapper(
         case v => v.asInstanceOf[AnyRef]
       }
       .toArray[AnyRef]
-
-    DataContexts.of((name: String) =>
-      name match {
-        case "inputRecord" => valuesArray
-        case DataContext.Variable.UTC_TIMESTAMP.camelName =>
-          java.lang.Long.valueOf(System.currentTimeMillis())
-        case _ => null
-      })
+    DataContexts.of(Map("inputRecord" -> valuesArray).asJava)
   }
 
   /**
@@ -104,7 +100,8 @@ case class UnifiedFunctionSparkWrapper(
    * UnifiedFunctionRepository.loadFunctions() are RexInputRef created with makeInputRef(), we can
    * directly extract types from the call's operands.
    */
-  private def extractInputSchema(rexCall: RexCall): RelDataType = {
+  private def extractInputSchema(rexNode: RexNode): RelDataType = {
+    val rexCall = rexNode.asInstanceOf[RexCall]
     val operands = rexCall.getOperands.asScala
 
     if (operands.isEmpty) {
@@ -119,19 +116,6 @@ case class UnifiedFunctionSparkWrapper(
       typeFactory.createStructType(types, names)
     }
   }
-
-  private def asRexCall(node: RexNode): RexCall =
-    if (node == null) {
-      throw new IllegalArgumentException(
-        "UnifiedFunctionSparkWrapper requires a non-null RexCall")
-    } else {
-      node match {
-        case call: RexCall => call
-        case other =>
-          throw new IllegalArgumentException(
-            s"UnifiedFunctionSparkWrapper expects a RexCall but received: ${other.getClass.getName}")
-      }
-    }
 
   /**
    * Serialize RexNode using RelJsonSerializer. fieldTypes parameter is empty since it's
@@ -169,7 +153,7 @@ case class UnifiedFunctionSparkWrapper(
   @throws(classOf[ClassNotFoundException])
   private def readObject(in: java.io.ObjectInputStream): Unit = {
     in.defaultReadObject()
-    _rexNode = asRexCall(deserialize(serializedData))
+    _rexNode = deserialize(serializedData)
   }
 
   override def toString: String = s"UnifiedFunction(${_rexNode}(${children.mkString(",")}))"

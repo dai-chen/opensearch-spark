@@ -9,7 +9,6 @@ import org.opensearch.common.geo.GeoPoint
 import org.opensearch.flint.spark.function.TumbleFunction
 import org.opensearch.flint.spark.query.UnifiedQueryParser
 import org.opensearch.flint.spark.query.api.UnifiedFunctionRepository
-import org.opensearch.flint.spark.query.calcite.CalciteExecutionContext
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
 import org.opensearch.flint.spark.udt.{IPAddress, IPAddressUDT}
 import org.opensearch.flint.spark.udt.GeoPointUDT
