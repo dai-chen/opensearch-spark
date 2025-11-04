@@ -148,6 +148,18 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     }
   }
 
+  test("test PPL function resolved through Calcite - PPL function with same name") {
+    val result = spark.sql(s"""
+                              | source = $testTable
+                              | | eval col1 = min('hello', 40, age)
+                              | | fields name, col1
+                              |""".stripMargin)
+
+    result.explain(true)
+    result.explain("codegen")
+    result.show
+  }
+
   test("test PPL function resolved through Calcite - PPL & Spark function mix use") {
     val result = spark.sql(s"""
                               | source = $testTable
@@ -172,6 +184,24 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
                              | | where name = 'alice'
                              | | eval cleaned_data = json_delete(data, 'age')
                              | | fields name, cleaned_data
+                             |""".stripMargin)
+
+    result.explain(true)
+    result.show
+
+    sql("DROP TABLE test_calcite_func")
+  }
+
+  test("test PPL function resolved through Calcite - PPL command") {
+    sql("CREATE TABLE test_calcite_func (name STRING, data STRING) USING JSON")
+    sql("""INSERT INTO test_calcite_func VALUES
+        ('alice', '{"age":25,"city":"NYC"}'),
+        ('bob', '{"age":30,"city":"LA"}')""")
+
+    val result = spark.sql("""
+                             | source = spark_catalog.default.test_calcite_func
+                             | | spath input=data city
+                             | | fields name, city
                              |""".stripMargin)
 
     result.explain(true)
