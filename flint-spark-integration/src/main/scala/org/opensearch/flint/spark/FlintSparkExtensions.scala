@@ -28,8 +28,13 @@ class FlintSparkExtensions extends (SparkSessionExtensions => Unit) with Logging
       new UnifiedQueryParser(spark, new FlintSparkSqlParser(parser))
     }
 
-    // Get function descriptions and register them
+    // Register regular functions
     UnifiedFunctionRepository.loadFunctions().foreach { description =>
+      extensions.injectFunction(description)
+    }
+
+    // Register aggregate functions
+    UnifiedFunctionRepository.loadAggregateFunctions().foreach { description =>
       extensions.injectFunction(description)
     }
 

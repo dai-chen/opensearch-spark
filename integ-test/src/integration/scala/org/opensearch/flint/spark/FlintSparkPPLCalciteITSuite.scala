@@ -192,7 +192,19 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     sql("DROP TABLE test_calcite_func")
   }
 
-  test("test PPL function resolved through Calcite - PPL command") {
+  // PPL bug: Unsupported function exception thrown in PPLFuncImpTable.resolve
+  ignore("test PPL function resolved through Calcite - PPL bin command") {
+    val result = spark.sql(s"""
+                              | source = $testTable
+                              | | bin age span=3
+                              |""".stripMargin)
+
+    result.explain(true)
+    result.explain("codegen")
+    result.show
+  }
+
+  test("test PPL function resolved through Calcite - PPL spath command") {
     sql("CREATE TABLE test_calcite_func (name STRING, data STRING) USING JSON")
     sql("""INSERT INTO test_calcite_func VALUES
         ('alice', '{"age":25,"city":"NYC"}'),
@@ -208,5 +220,16 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     result.show
 
     sql("DROP TABLE test_calcite_func")
+  }
+
+  test("test PPL aggregate function resolved through Calcite") {
+    val result = spark.sql(s"""
+                              | source = $testTable
+                              | | stats values(age)
+                              |""".stripMargin)
+
+    result.explain(true)
+    result.explain("codegen")
+    result.show
   }
 }
