@@ -5,16 +5,20 @@
 
 package org.opensearch.flint.spark.query.wrapper
 
+import java.util.Collections
+
 import scala.collection.JavaConverters._
 
 import org.apache.calcite.{DataContext, DataContexts}
 import org.apache.calcite.adapter.java.JavaTypeFactory
-import org.apache.calcite.jdbc.JavaTypeFactoryImpl
 import org.apache.calcite.plan.{RelOptCluster, RelOptPlanner}
 import org.apache.calcite.plan.volcano.VolcanoPlanner
 import org.apache.calcite.rel.`type`.RelDataType
-import org.apache.calcite.rex.{RexBuilder, RexCall, RexExecutorImpl, RexInputRef, RexNode}
+import org.apache.calcite.rex.{RexBuilder, RexCall, RexExecutable, RexInputRef, RexNode}
 import org.opensearch.flint.spark.query.calcite.CalciteTypeConverter
+import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory
+import org.opensearch.sql.data.`type`.ExprType
+import org.opensearch.sql.opensearch.storage.script.CalciteScriptEngine
 import org.opensearch.sql.opensearch.storage.serde.RelJsonSerializer
 
 import org.apache.spark.internal.Logging
@@ -29,7 +33,7 @@ import org.apache.spark.sql.types.DataType
  * executors.
  */
 case class UnifiedFunctionSparkWrapper(
-    @transient private var _rexNode: RexNode,
+    @transient private var rexNode: RexNode,
     override val children: Seq[Expression])
     extends Expression
     with CodegenFallback
@@ -39,7 +43,8 @@ case class UnifiedFunctionSparkWrapper(
   // Serialized form
   private var serializedData: String = _
 
-  @transient private lazy val typeFactory: JavaTypeFactory = new JavaTypeFactoryImpl()
+  @transient private lazy val typeFactory: JavaTypeFactory =
+    OpenSearchTypeFactory.TYPE_FACTORY // new JavaTypeFactoryImpl()
   @transient private lazy val rexBuilder: RexBuilder = new RexBuilder(typeFactory)
   @transient private lazy val planner: RelOptPlanner = new VolcanoPlanner()
   @transient private lazy val cluster: RelOptCluster = {
@@ -48,21 +53,22 @@ case class UnifiedFunctionSparkWrapper(
   }
   @transient private lazy val relJsonSerializer: RelJsonSerializer = new RelJsonSerializer(
     cluster)
-  @transient private lazy val rowType: RelDataType = extractInputSchema(_rexNode)
+  @transient private lazy val rowType: RelDataType = extractInputSchema(rexNode)
 
   // Cache the compiled executor - expensive to create as it generates and compiles Java code
+  // Uses translate logic from CalciteScriptEngine to support OpenSearch UDTs
   @transient private lazy val rexExecutor = {
-    val executor = RexExecutorImpl.getExecutable(
-      rexBuilder,
-      java.util.Collections.singletonList(_rexNode),
-      rowType)
-    logInfo(s"Generate code: ${executor.getSource}")
-    executor
+    val fieldTypes = Collections.emptyMap[String, ExprType]
+    val getter = new CalciteScriptEngine.ScriptInputGetter(typeFactory, rowType, fieldTypes)
+    val code = CalciteScriptEngine.translate(rexBuilder, List(rexNode).asJava, getter, rowType)
+
+    logInfo(s"Generated code: $code")
+    new RexExecutable(code, "Unified function generated code")
   }
 
-  override def dataType: DataType = CalciteTypeConverter.toSparkType(_rexNode.getType)
+  override def dataType: DataType = CalciteTypeConverter.toSparkType(rexNode.getType)
 
-  override def nullable: Boolean = _rexNode.getType.isNullable
+  override def nullable: Boolean = rexNode.getType.isNullable
 
   override def foldable: Boolean = false
 
@@ -86,13 +92,15 @@ case class UnifiedFunctionSparkWrapper(
   }
 
   private def createDataContext(inputs: Seq[Any]): DataContext = {
-    val valuesArray: Array[AnyRef] = inputs
-      .map {
+    // Create map with field names as keys: "_0", "_1", "_2", etc.
+    val fieldMap = inputs.zipWithIndex.map { case (value, index) =>
+      s"_$index" -> (value match {
         case null => null
         case v => v.asInstanceOf[AnyRef]
-      }
-      .toArray[AnyRef]
-    DataContexts.of(Map("inputRecord" -> valuesArray).asJava)
+      })
+    }.toMap
+
+    DataContexts.of(fieldMap.asJava)
   }
 
   /**
@@ -117,35 +125,10 @@ case class UnifiedFunctionSparkWrapper(
     }
   }
 
-  /**
-   * Serialize RexNode using RelJsonSerializer. fieldTypes parameter is empty since it's
-   * OpenSearch-specific (ExprType).
-   */
-  private def serialize(rexNode: RexNode): String = {
-    try {
-      relJsonSerializer.serialize(rexNode, rowType, java.util.Collections.emptyMap())
-    } catch {
-      case e: Exception =>
-        throw new IllegalStateException(s"Failed to serialize RexNode: $rexNode", e)
-    }
-  }
-
-  /**
-   * Deserialize RexNode using RelJsonSerializer. Extracts the RexNode from the deserialized map.
-   */
-  private def deserialize(struct: String): RexNode = {
-    try {
-      val resultMap = relJsonSerializer.deserialize(struct)
-      resultMap.get(RelJsonSerializer.EXPR).asInstanceOf[RexNode]
-    } catch {
-      case e: Exception =>
-        throw new IllegalStateException(s"Failed to deserialize RexNode: $struct", e)
-    }
-  }
-
   @throws(classOf[java.io.IOException])
   private def writeObject(out: java.io.ObjectOutputStream): Unit = {
-    serializedData = serialize(_rexNode)
+    serializedData =
+      relJsonSerializer.serialize(rexNode, rowType, java.util.Collections.emptyMap())
     out.defaultWriteObject()
   }
 
@@ -153,10 +136,11 @@ case class UnifiedFunctionSparkWrapper(
   @throws(classOf[ClassNotFoundException])
   private def readObject(in: java.io.ObjectInputStream): Unit = {
     in.defaultReadObject()
-    _rexNode = deserialize(serializedData)
+    val resultMap = relJsonSerializer.deserialize(serializedData)
+    rexNode = resultMap.get(RelJsonSerializer.EXPR).asInstanceOf[RexNode]
   }
 
-  override def toString: String = s"UnifiedFunction(${_rexNode}(${children.mkString(",")}))"
+  override def toString: String = s"UnifiedFunction(${rexNode}(${children.mkString(",")}))"
 
   override protected def withNewChildrenInternal(
       newChildren: IndexedSeq[Expression]): Expression = {

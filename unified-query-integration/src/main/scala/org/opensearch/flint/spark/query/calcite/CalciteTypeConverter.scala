@@ -7,6 +7,8 @@ package org.opensearch.flint.spark.query.calcite
 
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelDataTypeField}
 import org.apache.calcite.sql.`type`.SqlTypeName
+import org.opensearch.sql.calcite.`type`.ExprTimeStampType
+import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory
 
 import org.apache.spark.sql.types._
 
@@ -66,7 +68,11 @@ object CalciteTypeConverter {
       case StringType => typeFactory.createSqlType(SqlTypeName.VARCHAR)
       case BinaryType => typeFactory.createSqlType(SqlTypeName.VARBINARY)
       case DateType => typeFactory.createSqlType(SqlTypeName.DATE)
-      case TimestampType => typeFactory.createSqlType(SqlTypeName.TIMESTAMP)
+      // Convert Spark timestamp type to Calcite UDT
+      case TimestampType =>
+        new ExprTimeStampType(
+          OpenSearchTypeFactory.TYPE_FACTORY
+        ) // typeFactory.createSqlType(SqlTypeName.TIMESTAMP)
       case ArrayType(elementType, _) =>
         typeFactory.createArrayType(toCalciteType(elementType, typeFactory), -1)
       case MapType(keyType, valueType, _) =>

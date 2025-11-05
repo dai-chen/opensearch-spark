@@ -19,6 +19,7 @@ import org.apache.calcite.sql.validate.SqlUserDefinedFunction
 import org.opensearch.flint.spark.query.calcite.CalciteTypeConverter
 import org.opensearch.flint.spark.query.wrapper.{UnifiedAggregateSparkWrapper, UnifiedFunctionSparkWrapper}
 import org.opensearch.sql.calcite.udf.UserDefinedAggFunction
+import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory
 import org.opensearch.sql.expression.function.{PPLBuiltinOperators, PPLFuncImpTable}
 
 import org.apache.spark.internal.Logging
@@ -43,7 +44,7 @@ object UnifiedFunctionRepository extends Logging {
    * happens at runtime when actual argument types are available, avoiding NPE from paramTypes().
    */
   def loadFunctions(): Seq[(FunctionIdentifier, ExpressionInfo, FunctionBuilder)] = {
-    val typeFactory = new JavaTypeFactoryImpl()
+    val typeFactory = OpenSearchTypeFactory.TYPE_FACTORY // new JavaTypeFactoryImpl()
     val rexBuilder = new RexBuilder(typeFactory)
 
     val operatorTable = PPLBuiltinOperators.instance()

@@ -40,7 +40,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     super.beforeAll()
 
     // Create test table
-    createPartitionedStateCountryTable(testTable)
+    createTimeSeriesTable(testTable)
   }
 
   ignore("test") {
@@ -193,7 +193,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
   }
 
   // PPL bug: Unsupported function exception thrown in PPLFuncImpTable.resolve
-  ignore("test PPL function resolved through Calcite - PPL bin command") {
+  ignore("test PPL function resolved through Calcite - bin command") {
     val result = spark.sql(s"""
                               | source = $testTable
                               | | bin age span=3
@@ -204,7 +204,26 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     result.show
   }
 
-  test("test PPL function resolved through Calcite - PPL spath command") {
+  test("test PPL function resolved through Calcite - timechart command") {
+    sql("CREATE TABLE test_events (`@timestamp` TIMESTAMP, host STRING, packets INT) USING JSON")
+    sql("""INSERT INTO test_events VALUES
+        (TIMESTAMP '2025-09-08 10:00:00', 'server1', 60),
+        (TIMESTAMP '2025-09-08 10:01:00', 'server1', 120),
+        (TIMESTAMP '2025-09-08 10:02:00', 'server1', 60),
+        (TIMESTAMP '2025-09-08 10:02:30', 'server2', 180)""")
+
+    val result = spark.sql("""
+                             | source = spark_catalog.default.test_events
+                             | | timechart span=2m limit=1 sum(packets) by host
+                             |""".stripMargin)
+
+    result.explain(true)
+    result.show
+
+    sql("DROP TABLE test_events")
+  }
+
+  test("test PPL function resolved through Calcite - spath command") {
     sql("CREATE TABLE test_calcite_func (name STRING, data STRING) USING JSON")
     sql("""INSERT INTO test_calcite_func VALUES
         ('alice', '{"age":25,"city":"NYC"}'),
@@ -231,5 +250,25 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     result.explain(true)
     result.explain("codegen")
     result.show
+  }
+
+  // FIXME: SAFE_CAST should be translated to CAST in SparkSqlDialect
+  ignore("test PPL schemaless support through Calcite") {
+    sql("CREATE TABLE test_calcite_func (name STRING, data STRING) USING JSON")
+    sql("""INSERT INTO test_calcite_func VALUES
+        ('alice', '{"age":25,"city":"NYC"}'),
+        ('bob', '{"age":30,"city":"LA"}')""")
+
+    val result = spark.sql("""
+                             | source = spark_catalog.default.test_calcite_func
+                             | | spath input=data age
+                             | | eval ageAbs = abs(age)
+                             | | fields age, ageAbs
+                             |""".stripMargin)
+
+    result.explain(true)
+    result.show
+
+    sql("DROP TABLE test_calcite_func")
   }
 }

@@ -299,6 +299,9 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
     assembly / test := (Test / test).value
   )
 
+val osServer = ("org.opensearch" % "opensearch" % opensearchVersion % Provided)
+  .intransitive() // no transitive deps
+
 lazy val unifiedQueryIntegration = (project in file("unified-query-integration"))
   .enablePlugins(AssemblyPlugin)
   .settings(
@@ -321,6 +324,8 @@ lazy val unifiedQueryIntegration = (project in file("unified-query-integration")
       "org.scalatest" %% "scalatest-flatspec" % "3.2.15" % "test",
       "org.scalatestplus" %% "mockito-4-6" % "3.2.15.0" % "test",
       "com.github.sbt" % "junit-interface" % "0.13.3" % "test",
+      // TODO: need ScriptEngine interface
+      osServer,
       // TODO: move ExtendedRelSerializer to core module
       "org.opensearch.query" % "unified-query-opensearch" % "2.19.0.0-SNAPSHOT"
         excludeAll(
