@@ -237,7 +237,7 @@ WARN SimpleFunctionRegistry: The function coalesce replaced a previously registe
        java.lang.UnsupportedOperationException: Relevance search query functions are only supported when they are pushed down
 	   at org.opensearch.sql.expression.function.udf.RelevanceQueryFunction$RelevanceQueryImplementor.implement(RelevanceQueryFunction.java:97)
      */
-    assertThrows[SparkException] {
+    assertThrows[UnsupportedOperationException] {
       spark.sql(s"source = $testTable | where match(name, 'hello')").show
     }
   }

@@ -28,47 +28,25 @@ import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 import org.apache.spark.sql.types.DataType
 
 /**
- * Spark expression wrapper that directly evaluates Calcite RexNode expressions. Handles
- * serialization/deserialization using OpenSearch's RelJsonSerializer for safe distribution across
- * executors.
+ * Spark expression wrapper that directly evaluates Calcite RexExecutable. Avoids Guava
+ * deserialization issues by accepting pre-compiled RexExecutable from repository.
  */
 case class UnifiedFunctionSparkWrapper(
-    @transient private var rexNode: RexNode,
+    @transient private var rexExecutor: RexExecutable,
+    private val sparkDataType: DataType,
+    private val isNullable: Boolean,
     override val children: Seq[Expression])
     extends Expression
     with CodegenFallback
     with NonSQLExpression
     with Logging {
 
-  // Serialized form
-  private var serializedData: String = _
+  // Serialized form - store generated code string instead of RexNode/RexExecutable
+  private var serializedCode: String = _
 
-  @transient private lazy val typeFactory: JavaTypeFactory =
-    OpenSearchTypeFactory.TYPE_FACTORY // new JavaTypeFactoryImpl()
-  @transient private lazy val rexBuilder: RexBuilder = new RexBuilder(typeFactory)
-  @transient private lazy val planner: RelOptPlanner = new VolcanoPlanner()
-  @transient private lazy val cluster: RelOptCluster = {
-    planner.setExecutor(null)
-    RelOptCluster.create(planner, rexBuilder)
-  }
-  @transient private lazy val relJsonSerializer: RelJsonSerializer = new RelJsonSerializer(
-    cluster)
-  @transient private lazy val rowType: RelDataType = extractInputSchema(rexNode)
+  override def dataType: DataType = sparkDataType
 
-  // Cache the compiled executor - expensive to create as it generates and compiles Java code
-  // Uses translate logic from CalciteScriptEngine to support OpenSearch UDTs
-  @transient private lazy val rexExecutor = {
-    val fieldTypes = Collections.emptyMap[String, ExprType]
-    val getter = new CalciteScriptEngine.ScriptInputGetter(typeFactory, rowType, fieldTypes)
-    val code = CalciteScriptEngine.translate(rexBuilder, List(rexNode).asJava, getter, rowType)
-
-    logInfo(s"Generated code: $code")
-    new RexExecutable(code, "Unified function generated code")
-  }
-
-  override def dataType: DataType = CalciteTypeConverter.toSparkType(rexNode.getType)
-
-  override def nullable: Boolean = rexNode.getType.isNullable
+  override def nullable: Boolean = isNullable
 
   override def foldable: Boolean = false
 
@@ -103,32 +81,10 @@ case class UnifiedFunctionSparkWrapper(
     DataContexts.of(fieldMap.asJava)
   }
 
-  /**
-   * Extract input schema (RelDataType) from RexCall operands. Since all inputs in
-   * UnifiedFunctionRepository.loadFunctions() are RexInputRef created with makeInputRef(), we can
-   * directly extract types from the call's operands.
-   */
-  private def extractInputSchema(rexNode: RexNode): RelDataType = {
-    val rexCall = rexNode.asInstanceOf[RexCall]
-    val operands = rexCall.getOperands.asScala
-
-    if (operands.isEmpty) {
-      typeFactory.createStructType(
-        java.util.Collections.emptyList(),
-        java.util.Collections.emptyList())
-    } else {
-      // All operands are RexInputRef from loadFunctions()
-      val inputRefs = operands.collect { case ref: RexInputRef => ref }
-      val types = inputRefs.map(_.getType).asJava
-      val names = inputRefs.map(ref => s"_${ref.getIndex}").asJava
-      typeFactory.createStructType(types, names)
-    }
-  }
-
   @throws(classOf[java.io.IOException])
   private def writeObject(out: java.io.ObjectOutputStream): Unit = {
-    serializedData =
-      relJsonSerializer.serialize(rexNode, rowType, java.util.Collections.emptyMap())
+    // Serialize the generated code from RexExecutable
+    serializedCode = rexExecutor.getSource
     out.defaultWriteObject()
   }
 
@@ -136,11 +92,11 @@ case class UnifiedFunctionSparkWrapper(
   @throws(classOf[ClassNotFoundException])
   private def readObject(in: java.io.ObjectInputStream): Unit = {
     in.defaultReadObject()
-    val resultMap = relJsonSerializer.deserialize(serializedData)
-    rexNode = resultMap.get(RelJsonSerializer.EXPR).asInstanceOf[RexNode]
+    // Recreate RexExecutable from serialized code - avoids Guava cache issues
+    rexExecutor = new RexExecutable(serializedCode, "Unified function generated code")
   }
 
-  override def toString: String = s"UnifiedFunction(${rexNode}(${children.mkString(",")}))"
+  override def toString: String = s"UnifiedFunction($sparkDataType(${children.mkString(",")}))"
 
   override protected def withNewChildrenInternal(
       newChildren: IndexedSeq[Expression]): Expression = {

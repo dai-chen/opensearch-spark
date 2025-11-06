@@ -44,7 +44,12 @@ object UnifiedFunctionRepository extends Logging {
    * happens at runtime when actual argument types are available, avoiding NPE from paramTypes().
    */
   def loadFunctions(): Seq[(FunctionIdentifier, ExpressionInfo, FunctionBuilder)] = {
-    val typeFactory = OpenSearchTypeFactory.TYPE_FACTORY // new JavaTypeFactoryImpl()
+    import java.util.Collections
+    import org.apache.calcite.rex.RexExecutable
+    import org.opensearch.sql.data.`type`.ExprType
+    import org.opensearch.sql.opensearch.storage.script.CalciteScriptEngine
+
+    val typeFactory = OpenSearchTypeFactory.TYPE_FACTORY
     val rexBuilder = new RexBuilder(typeFactory)
 
     val operatorTable = PPLBuiltinOperators.instance()
@@ -68,7 +73,35 @@ object UnifiedFunctionRepository extends Logging {
           }
           val rexNode =
             PPLFuncImpTable.INSTANCE.resolve(rexBuilder, functionName, rexNodes.toArray: _*)
-          UnifiedFunctionSparkWrapper(rexNode, children)
+
+          // Pre-compile RexExecutable here to avoid Guava deserialization issues
+          val rowType = {
+            val rexCall = rexNode.asInstanceOf[org.apache.calcite.rex.RexCall]
+            val operands = rexCall.getOperands.asScala
+            if (operands.isEmpty) {
+              typeFactory.createStructType(
+                java.util.Collections.emptyList(),
+                java.util.Collections.emptyList())
+            } else {
+              val inputRefs = operands.collect { case ref: org.apache.calcite.rex.RexInputRef =>
+                ref
+              }
+              val types = inputRefs.map(_.getType).asJava
+              val names = inputRefs.map(ref => s"_${ref.getIndex}").asJava
+              typeFactory.createStructType(types, names)
+            }
+          }
+
+          val fieldTypes = Collections.emptyMap[String, ExprType]
+          val getter = new CalciteScriptEngine.ScriptInputGetter(typeFactory, rowType, fieldTypes)
+          val code =
+            CalciteScriptEngine.translate(rexBuilder, List(rexNode).asJava, getter, rowType)
+          val rexExecutor = new RexExecutable(code, "Unified function generated code")
+
+          val sparkDataType = CalciteTypeConverter.toSparkType(rexNode.getType)
+          val isNullable = rexNode.getType.isNullable
+
+          UnifiedFunctionSparkWrapper(rexExecutor, sparkDataType, isNullable, children)
         }
         (identifier, info, builder)
       }
