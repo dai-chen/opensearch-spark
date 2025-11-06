@@ -9,7 +9,7 @@ import org.opensearch.flint.spark.query.catalog.SparkSchema
 import org.opensearch.sql.data.model.ExprValueUtils
 import org.opensearch.sql.expression.datetime.DateTimeFunctions
 
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.types.{IntegerType, StringType}
@@ -148,7 +148,13 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     }
   }
 
-  test("test PPL function resolved through Calcite - PPL function with same name") {
+  test("Show PPL functions") {
+    sql("SHOW USER FUNCTIONS").show(100)
+
+    sql("DESCRIBE FUNCTION EXTENDED json_delete").show(false)
+  }
+
+  test("PPL function resolved through Calcite - PPL function with same name") {
     val result = spark.sql(s"""
                               | source = $testTable
                               | | eval col1 = min('hello', 40, age)
@@ -158,9 +164,85 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     result.explain(true)
     result.explain("codegen")
     result.show
+
+    /*
+     * Case 1: Same behavior and SHOULD NOT override Spark's, e.g., sha2
+     * Case 2: Different/enhanced semantic and SHOULD override, e.g., coalesce
+     * Case 3: Conflicts with existing, e.g., min/max
+     */
+
+    /*
+     * ----- Case 3 -----
+     * Spark SQL's builtin function is overridden:
+     *  Aggregate [name#76], [UnifiedFunction(MIN($0)(age#77)) AS UnifiedFunction(MIN($0)(age))#98, UnifiedFunction(MAX($0)(age#77)) AS UnifiedFunction(MAX($0)(age))#99]
++- SubqueryAlias spark_catalog.default.flint_ppl_test
+   +- Relation spark_catalog.default.flint_ppl_test[time#75,name#76,age#77,address#78] csv
+org.apache.spark.sql.AnalysisException: [MISSING_AGGREGATION] The non-aggregating expression "age" is based on columns which are not participating in the GROUP BY clause.
+Add the columns or the expression to the GROUP BY, aggregate the expression, or use "any_value(age)" if you do not care which of the values within a group is returned.;
+     */
+    // spark.sql(s"SELECT MIN(age) FROM $testTable GROUP BY name").show
+
+    // ----- Case 1 & 2 -----
+    // Other PPL functions override Spark's
+    /*
+WARN SimpleFunctionRegistry: The function json_array_length replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function e replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function mod replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function sha2 replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function max replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function min replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function cosh replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function sinh replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function rint replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function expm1 replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function timestamp replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function date replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function weekday replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function unix_timestamp replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function date_add replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function date_sub replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function extract replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function year replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function quarter replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function month replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function day replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function hour replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function minute replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function second replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function now replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function current_date replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function date_format replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function datediff replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function last_day replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function from_unixtime replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function forall replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function exists replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function array replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function filter replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function transform replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function reduce replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function width_bucket replaced a previously registered function.
+WARN SimpleFunctionRegistry: The function coalesce replaced a previously registered function.
+     */
   }
 
-  test("test PPL function resolved through Calcite - PPL & Spark function mix use") {
+  test("PPL function resolved through Calcite - OpenSearch function") {
+    /*
+      Translated to:
+       SELECT *
+       FROM `spark_catalog`.`default`.`flint_ppl_test`
+       WHERE `match`(MAP ('field', `name`), MAP ('query', 'hello'))
+
+      Exception:
+       java.lang.UnsupportedOperationException: Relevance search query functions are only supported when they are pushed down
+	   at org.opensearch.sql.expression.function.udf.RelevanceQueryFunction$RelevanceQueryImplementor.implement(RelevanceQueryFunction.java:97)
+     */
+    assertThrows[SparkException] {
+      spark.sql(s"source = $testTable | where match(name, 'hello')").show
+    }
+  }
+
+  test("PPL function resolved through Calcite - PPL & Spark function mix use") {
     val result = spark.sql(s"""
                               | source = $testTable
                               | | eval col1 = COALESCE('hello', substring(name, 3)),
@@ -173,7 +255,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     result.show
   }
 
-  test("test PPL function resolved through Calcite - PPL function only") {
+  test("PPL function resolved through Calcite - PPL function only") {
     sql("CREATE TABLE test_calcite_func (name STRING, data STRING) USING JSON")
     sql("""INSERT INTO test_calcite_func VALUES
         ('alice', '{"age":25,"city":"NYC"}'),
@@ -193,7 +275,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
   }
 
   // PPL bug: Unsupported function exception thrown in PPLFuncImpTable.resolve
-  ignore("test PPL function resolved through Calcite - bin command") {
+  ignore("PPL function resolved through Calcite - bin command") {
     val result = spark.sql(s"""
                               | source = $testTable
                               | | bin age span=3
@@ -204,7 +286,8 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     result.show
   }
 
-  test("test PPL function resolved through Calcite - timechart command") {
+  // FIXME: interval unit behind per_second is translated to string literal
+  test("PPL function resolved through Calcite - timechart command") {
     sql("CREATE TABLE test_events (`@timestamp` TIMESTAMP, host STRING, packets INT) USING JSON")
     sql("""INSERT INTO test_events VALUES
         (TIMESTAMP '2025-09-08 10:00:00', 'server1', 60),
@@ -223,7 +306,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     sql("DROP TABLE test_events")
   }
 
-  test("test PPL function resolved through Calcite - spath command") {
+  test("PPL function resolved through Calcite - spath command") {
     sql("CREATE TABLE test_calcite_func (name STRING, data STRING) USING JSON")
     sql("""INSERT INTO test_calcite_func VALUES
         ('alice', '{"age":25,"city":"NYC"}'),
@@ -241,7 +324,7 @@ class FlintSparkPPLCalciteITSuite extends FlintSparkSuite {
     sql("DROP TABLE test_calcite_func")
   }
 
-  test("test PPL aggregate function resolved through Calcite") {
+  test("PPL aggregate function resolved through Calcite") {
     val result = spark.sql(s"""
                               | source = $testTable
                               | | stats values(age)
