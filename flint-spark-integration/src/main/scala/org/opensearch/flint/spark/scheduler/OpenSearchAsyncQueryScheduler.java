@@ -154,6 +154,7 @@ public class OpenSearchAsyncQueryScheduler implements AsyncQueryScheduler {
         }
     }
     private void ensureIndexExists(IRestHighLevelClient client) {
+        /*
         try {
             if (!client.doesIndexExist(new GetIndexRequest(SCHEDULER_INDEX_NAME), RequestOptions.DEFAULT)) {
                 createAsyncQuerySchedulerIndex(client);
@@ -161,6 +162,7 @@ public class OpenSearchAsyncQueryScheduler implements AsyncQueryScheduler {
         } catch (Throwable e) {
             handleException("Failed to check/create index", SCHEDULER_INDEX_NAME, e);
         }
+         */
     }
 
     private void indexJob(AsyncQuerySchedulerRequest asyncQuerySchedulerRequest, IRestHighLevelClient client) throws Exception {

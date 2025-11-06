@@ -292,6 +292,21 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
       case PathList("module-info.class") => MergeStrategy.discard
       case PathList("META-INF", "versions", xs @ _, "module-info.class") =>
         MergeStrategy.discard
+      // Calcite codegen - discard to avoid ASM issues with large bytecode
+      case PathList("org", "apache", "calcite", "linq4j", "tree", xs @ _*) if xs.last.endsWith(".class") =>
+        MergeStrategy.first
+      case PathList("org", "apache", "calcite", "runtime", xs @ _*) if xs.last.endsWith(".class") =>
+        MergeStrategy.first
+      case PathList("org", "apache", "calcite", "sql2rel", xs @ _*) if xs.last.endsWith(".class") =>
+        MergeStrategy.first
+      // Calcite metadata and service files
+      case PathList("META-INF", "services", xs @ _*) =>
+        MergeStrategy.filterDistinctLines
+      case PathList("codegen", xs @ _*) =>
+        MergeStrategy.discard
+      // Handle jakarta.json vs javax.json conflicts - prefer jakarta (newer)
+      case path if path.contains("org/glassfish/json") =>
+        MergeStrategy.first
       case x =>
         val oldStrategy = (assembly / assemblyMergeStrategy).value
         oldStrategy(x)

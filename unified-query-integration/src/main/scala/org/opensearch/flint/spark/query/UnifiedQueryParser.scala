@@ -63,7 +63,7 @@ class UnifiedQueryParser(
       val unifiedPlan = unifiedQueryPlanner.plan(query)
       val sqlText = convertToSparkSqlQuery(unifiedPlan)
 
-      logInfo(s"PPL translated to Spark SQL: $sqlText")
+      logWarning(s"PPL translated to Spark SQL:\n $sqlText \n")
       sparkParser.parsePlan(sqlText)
     } catch {
       // Fall back to Spark parser if unified query planner cannot handle
