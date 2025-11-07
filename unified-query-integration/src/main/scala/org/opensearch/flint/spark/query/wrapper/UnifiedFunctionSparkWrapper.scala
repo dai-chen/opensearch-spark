@@ -96,7 +96,27 @@ case class UnifiedFunctionSparkWrapper(
     rexExecutor = new RexExecutable(serializedCode, "Unified function generated code")
   }
 
-  override def toString: String = s"UnifiedFunction($sparkDataType(${children.mkString(",")}))"
+  override def toString: String = s"UnifiedFunction(${children.mkString(",")})"
+
+  override lazy val canonicalized: Expression = {
+    val canonicalizedChildren = children.map(_.canonicalized)
+    copy(children = canonicalizedChildren)
+  }
+
+  override def equals(obj: Any): Boolean = obj match {
+    case other: UnifiedFunctionSparkWrapper =>
+      sparkDataType == other.sparkDataType &&
+      isNullable == other.isNullable &&
+      children == other.children
+    case _ => false
+  }
+
+  override def hashCode(): Int = {
+    var result = sparkDataType.hashCode()
+    result = 31 * result + (if (isNullable) 1 else 0)
+    result = 31 * result + children.hashCode()
+    result
+  }
 
   override protected def withNewChildrenInternal(
       newChildren: IndexedSeq[Expression]): Expression = {
