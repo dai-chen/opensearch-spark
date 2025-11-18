@@ -18,6 +18,122 @@ import org.apache.spark.sql.types._
 object CalciteTypeConverter {
 
   /**
+   * Convert a Calcite RelDataType to SQL type name string.
+   */
+  def relDataTypeToSqlTypeName(calciteType: RelDataType): String = {
+    calciteType.getSqlTypeName match {
+      case SqlTypeName.BOOLEAN => "BOOLEAN"
+      case SqlTypeName.TINYINT => "TINYINT"
+      case SqlTypeName.SMALLINT => "SMALLINT"
+      case SqlTypeName.INTEGER => "INTEGER"
+      case SqlTypeName.BIGINT => "BIGINT"
+      case SqlTypeName.FLOAT | SqlTypeName.REAL => "FLOAT"
+      case SqlTypeName.DOUBLE => "DOUBLE"
+      case SqlTypeName.DECIMAL =>
+        s"DECIMAL(${calciteType.getPrecision},${calciteType.getScale})"
+      case SqlTypeName.CHAR | SqlTypeName.VARCHAR => "VARCHAR"
+      case SqlTypeName.BINARY | SqlTypeName.VARBINARY => "VARBINARY"
+      case SqlTypeName.DATE => "DATE"
+      case SqlTypeName.TIME => "TIME"
+      case SqlTypeName.TIMESTAMP | SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE => "TIMESTAMP"
+      case SqlTypeName.ARRAY =>
+        s"ARRAY<${relDataTypeToSqlTypeName(calciteType.getComponentType)}>"
+      case SqlTypeName.MAP =>
+        s"MAP<${relDataTypeToSqlTypeName(calciteType.getKeyType)},${relDataTypeToSqlTypeName(calciteType.getValueType)}>"
+      case SqlTypeName.ROW =>
+        val fields = calciteType.getFieldList
+        val fieldStrs = fields.toArray.map { field =>
+          val f = field.asInstanceOf[RelDataTypeField]
+          s"${f.getName}:${relDataTypeToSqlTypeName(f.getType)}"
+        }
+        s"STRUCT<${fieldStrs.mkString(",")}>"
+      case _ => "VARCHAR" // Fallback to VARCHAR for unknown types
+    }
+  }
+
+  /**
+   * Convert SQL type name string to Spark DataType.
+   */
+  def sqlTypeNameToSparkType(sqlTypeName: String): DataType = {
+    sqlTypeName match {
+      case "BOOLEAN" => BooleanType
+      case "TINYINT" => ByteType
+      case "SMALLINT" => ShortType
+      case "INTEGER" => IntegerType
+      case "BIGINT" => LongType
+      case "FLOAT" => FloatType
+      case "DOUBLE" => DoubleType
+      case s if s.startsWith("DECIMAL") =>
+        // Parse DECIMAL(precision,scale)
+        val pattern = """DECIMAL\((\d+),(\d+)\)""".r
+        s match {
+          case pattern(precision, scale) => DecimalType(precision.toInt, scale.toInt)
+          case _ => DecimalType(10, 0) // Default decimal
+        }
+      case "VARCHAR" | "CHAR" => StringType
+      case "VARBINARY" | "BINARY" => BinaryType
+      case "DATE" => DateType
+      case "TIME" | "TIMESTAMP" => TimestampType
+      case s if s.startsWith("ARRAY<") =>
+        // Parse ARRAY<elementType>
+        val elementTypeName = s.substring(6, s.length - 1)
+        ArrayType(sqlTypeNameToSparkType(elementTypeName))
+      case s if s.startsWith("MAP<") =>
+        // Parse MAP<keyType,valueType>
+        val content = s.substring(4, s.length - 1)
+        val parts = splitTopLevel(content, ',')
+        if (parts.length == 2) {
+          MapType(sqlTypeNameToSparkType(parts(0)), sqlTypeNameToSparkType(parts(1)))
+        } else {
+          MapType(StringType, StringType) // Fallback
+        }
+      case s if s.startsWith("STRUCT<") =>
+        // Parse STRUCT<field1:type1,field2:type2,...>
+        val content = s.substring(7, s.length - 1)
+        val fieldStrs = splitTopLevel(content, ',')
+        val fields = fieldStrs.map { fieldStr =>
+          val colonIdx = fieldStr.indexOf(':')
+          if (colonIdx > 0) {
+            val name = fieldStr.substring(0, colonIdx)
+            val typeName = fieldStr.substring(colonIdx + 1)
+            StructField(name, sqlTypeNameToSparkType(typeName), nullable = true)
+          } else {
+            StructField("unknown", StringType, nullable = true)
+          }
+        }
+        StructType(fields)
+      case _ => StringType // Fallback to String for unknown types
+    }
+  }
+
+  /**
+   * Helper method to split string at top-level delimiter (ignoring nested brackets).
+   */
+  private def splitTopLevel(s: String, delimiter: Char): Array[String] = {
+    val result = scala.collection.mutable.ArrayBuffer[String]()
+    var depth = 0
+    var start = 0
+
+    for (i <- 0 until s.length) {
+      val c = s.charAt(i)
+      if (c == '<' || c == '(') {
+        depth += 1
+      } else if (c == '>' || c == ')') {
+        depth -= 1
+      } else if (c == delimiter && depth == 0) {
+        result += s.substring(start, i).trim
+        start = i + 1
+      }
+    }
+
+    if (start < s.length) {
+      result += s.substring(start).trim
+    }
+
+    result.toArray
+  }
+
+  /**
    * Convert a Calcite RelDataType to a Spark DataType.
    */
   def toSparkType(calciteType: RelDataType): DataType = {

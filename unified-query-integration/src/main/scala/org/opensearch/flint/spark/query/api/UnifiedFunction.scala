@@ -5,19 +5,19 @@
 
 package org.opensearch.flint.spark.query.api
 
-import org.apache.calcite.rel.`type`.RelDataType
-
 /**
  * A unified abstraction over execution engines that can evaluate functions using a common
  * contract across Spark and Calcite.
  */
 trait UnifiedFunction extends Serializable {
 
-  /** Calcite data types expected for the input arguments. */
-  def inputTypes: Seq[RelDataType]
+  val functionName: String
 
-  /** Calcite return type of the function result. */
-  def returnType: RelDataType
+  /** SQL type names expected for the input arguments. */
+  def inputTypes: Seq[String]
+
+  /** SQL type name of the function result. */
+  def returnType: String
 
   /** Whether this function can return null values. */
   def nullable: Boolean

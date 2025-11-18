@@ -16,7 +16,7 @@ import org.apache.calcite.schema.impl.AggregateFunctionImpl
 import org.apache.calcite.sql.SqlAggFunction
 import org.apache.calcite.sql.validate.SqlUserDefinedAggFunction
 import org.apache.calcite.sql.validate.SqlUserDefinedFunction
-import org.opensearch.flint.spark.query.calcite.CalciteTypeConverter
+import org.opensearch.flint.spark.query.calcite.{CalciteTypeConverter, UnifiedFunctionCalciteAdapter}
 import org.opensearch.flint.spark.query.wrapper.{UnifiedAggregateSparkWrapper, UnifiedFunctionSparkWrapper}
 import org.opensearch.sql.calcite.udf.UserDefinedAggFunction
 import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory
@@ -44,67 +44,40 @@ object UnifiedFunctionRepository extends Logging {
    * happens at runtime when actual argument types are available, avoiding NPE from paramTypes().
    */
   def loadFunctions(): Seq[(FunctionIdentifier, ExpressionInfo, FunctionBuilder)] = {
-    import java.util.Collections
-    import org.apache.calcite.rex.RexExecutable
-    import org.opensearch.sql.data.`type`.ExprType
-    import org.opensearch.sql.opensearch.storage.script.CalciteScriptEngine
-
-    val typeFactory = OpenSearchTypeFactory.TYPE_FACTORY
-    val rexBuilder = new RexBuilder(typeFactory)
-
     val operatorTable = PPLBuiltinOperators.instance()
     val operators = operatorTable.getOperatorList.asScala.collect {
       case udf: SqlUserDefinedFunction => udf
     }
 
-    operators
-      .map { function =>
-        val functionName = function.getName.toLowerCase(Locale.ROOT)
-        val identifier = FunctionIdentifier(functionName)
-        logInfo(s"Registering PPL function $identifier")
-        val info =
-          new ExpressionInfo(classOf[UnifiedFunctionSparkWrapper].getCanonicalName, functionName)
-        val builder: FunctionBuilder = { children =>
-          // Spark UDF registry doesn't require specify all overloading function signatures.
-          // Instead, resolve PPL function when Catalyst provides children expression during analysis in function builder.
-          val rexNodes = children.map { child =>
-            val calciteType = CalciteTypeConverter.toCalciteType(child.dataType, typeFactory)
-            rexBuilder.makeInputRef(calciteType, children.indexOf(child))
-          }
-          val rexNode =
-            PPLFuncImpTable.INSTANCE.resolve(rexBuilder, functionName, rexNodes.toArray: _*)
+    operators.map { function =>
+      val functionName = function.getName.toLowerCase(Locale.ROOT)
+      val identifier = FunctionIdentifier(functionName)
+      logInfo(s"Registering PPL function $identifier")
 
-          // Pre-compile RexExecutable here to avoid Guava deserialization issues
-          val rowType = {
-            val rexCall = rexNode.asInstanceOf[org.apache.calcite.rex.RexCall]
-            val operands = rexCall.getOperands.asScala
-            if (operands.isEmpty) {
-              typeFactory.createStructType(
-                java.util.Collections.emptyList(),
-                java.util.Collections.emptyList())
-            } else {
-              val inputRefs = operands.collect { case ref: org.apache.calcite.rex.RexInputRef =>
-                ref
-              }
-              val types = inputRefs.map(_.getType).asJava
-              val names = inputRefs.map(ref => s"_${ref.getIndex}").asJava
-              typeFactory.createStructType(types, names)
-            }
-          }
+      val info =
+        new ExpressionInfo(classOf[UnifiedFunctionSparkWrapper].getCanonicalName, functionName)
 
-          val fieldTypes = Collections.emptyMap[String, ExprType]
-          val getter = new CalciteScriptEngine.ScriptInputGetter(typeFactory, rowType, fieldTypes)
-          val code =
-            CalciteScriptEngine.translate(rexBuilder, List(rexNode).asJava, getter, rowType)
-          val rexExecutor = new RexExecutable(code, "Unified function generated code")
+      val builder: FunctionBuilder = { children =>
+        // Create typeFactory and rexBuilder inside the closure to avoid serialization issues
+        val typeFactory = OpenSearchTypeFactory.TYPE_FACTORY
+        val rexBuilder = new RexBuilder(typeFactory)
 
-          val sparkDataType = CalciteTypeConverter.toSparkType(rexNode.getType)
-          val isNullable = rexNode.getType.isNullable
-
-          UnifiedFunctionSparkWrapper(rexExecutor, sparkDataType, isNullable, children)
+        // Convert Spark children to Calcite RexNodes
+        val rexNodes = children.map { child =>
+          val calciteType = CalciteTypeConverter.toCalciteType(child.dataType, typeFactory)
+          rexBuilder.makeInputRef(calciteType, children.indexOf(child))
         }
-        (identifier, info, builder)
+
+        // Use engine-agnostic factory method to create UnifiedFunction adapter
+        val unifiedFunction =
+          UnifiedFunctionCalciteAdapter.create(functionName, rexBuilder, rexNodes)
+
+        // Create Spark wrapper that delegates to the unified function
+        UnifiedFunctionSparkWrapper(unifiedFunction, children)
       }
+
+      (identifier, info, builder)
+    }
   }
 
   /**
