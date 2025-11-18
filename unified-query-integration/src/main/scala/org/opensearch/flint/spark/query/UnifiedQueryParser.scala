@@ -8,6 +8,7 @@ package org.opensearch.flint.spark.query
 import org.apache.calcite.rel.RelNode
 import org.apache.calcite.rel.rel2sql.RelToSqlConverter
 import org.apache.calcite.sql.dialect.SparkSqlDialect
+import org.opensearch.flint.spark.query.calcite.OpenSearchSparkSqlDialect
 import org.opensearch.flint.spark.query.catalog.SparkSchema
 import org.opensearch.sql.api.UnifiedQueryPlanner
 import org.opensearch.sql.common.antlr.SyntaxCheckException
@@ -55,7 +56,7 @@ class UnifiedQueryParser(
   }
 
   /** Converter that converts unified plan to Spark SQL using Spark SQL dialect. */
-  private val sparkSqlConverter = new RelToSqlConverter(SparkSqlDialect.DEFAULT)
+  private val sparkSqlConverter = new RelToSqlConverter(OpenSearchSparkSqlDialect.DEFAULT)
 
   override def parsePlan(query: String): LogicalPlan = {
     try {
@@ -99,6 +100,6 @@ class UnifiedQueryParser(
 
   private def convertToSparkSqlQuery(plan: RelNode): String = {
     val sqlNode = sparkSqlConverter.visitRoot(plan).asStatement
-    sqlNode.toSqlString(SparkSqlDialect.DEFAULT).getSql
+    sqlNode.toSqlString(OpenSearchSparkSqlDialect.DEFAULT).getSql
   }
 }
