@@ -7,7 +7,7 @@ package org.opensearch.flint.spark
 
 import org.opensearch.common.geo.GeoPoint
 import org.opensearch.flint.spark.function.TumbleFunction
-import org.opensearch.flint.spark.query.UnifiedQueryParser
+import org.opensearch.flint.spark.query.UnifiedQuerySparkParser
 import org.opensearch.flint.spark.query.api.UnifiedFunctionRepository
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
 import org.opensearch.flint.spark.udt.{IPAddress, IPAddressUDT}
@@ -23,9 +23,9 @@ import org.apache.spark.sql.types.UDTRegistration
 class FlintSparkExtensions extends (SparkSessionExtensions => Unit) with Logging {
 
   override def apply(extensions: SparkSessionExtensions): Unit = {
-    // Inject UnifiedQueryParser to handle PPL queries
+    // Inject UnifiedQuerySparkParser to handle PPL queries
     extensions.injectParser { (spark, parser) =>
-      new UnifiedQueryParser(spark, new FlintSparkSqlParser(parser))
+      new UnifiedQuerySparkParser(spark, new FlintSparkSqlParser(parser))
     }
 
     // Register regular functions

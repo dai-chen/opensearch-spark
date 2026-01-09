@@ -13,14 +13,14 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.test.SharedSparkSession
 
-class UnifiedQueryParserSuite extends SharedSparkSession {
-  private var unifiedParser: UnifiedQueryParser = _
+class UnifiedQuerySparkParserSuite extends SharedSparkSession {
+  private var unifiedParser: UnifiedQuerySparkParser = _
   private var mockSparkParser: ParserInterface = _
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
     mockSparkParser = mock[ParserInterface]
-    unifiedParser = new UnifiedQueryParser(spark, mockSparkParser)
+    unifiedParser = new UnifiedQuerySparkParser(spark, mockSparkParser)
 
     sql("CREATE TABLE foo (id INT, name STRING) USING JSON")
     sql("CREATE DATABASE db2")
@@ -55,9 +55,9 @@ class UnifiedQueryParserSuite extends SharedSparkSession {
   test("should translate PPL across databases and delegate to Spark parser") {
     unifiedParser.parsePlan(
       "source = spark_catalog.default.foo | lookup spark_catalog.db2.bar id | fields name, value")
-    verify(mockSparkParser).parsePlan("""SELECT `foo1`.`name`, `bar`.`value`
-        |FROM `spark_catalog`.`default`.`foo` `foo1`
-        |LEFT JOIN `spark_catalog`.`db2`.`bar` ON `foo1`.`id` = `bar`.`id`""".stripMargin)
+    verify(mockSparkParser).parsePlan("""SELECT `foo`.`name`, `bar`.`value`
+        |FROM `spark_catalog`.`default`.`foo`
+        |LEFT JOIN `spark_catalog`.`db2`.`bar` ON `foo`.`id` = `bar`.`id`""".stripMargin)
   }
 
   Seq("source = spark_catalog.db2.bar | fields value", "source = bar | fields value").foreach {

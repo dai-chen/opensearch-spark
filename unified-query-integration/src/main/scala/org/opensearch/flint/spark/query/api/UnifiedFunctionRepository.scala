@@ -8,49 +8,48 @@ package org.opensearch.flint.spark.query.api
 import java.util.Locale
 
 import scala.collection.JavaConverters._
-import scala.util.Try
 
-import org.apache.calcite.jdbc.JavaTypeFactoryImpl
-import org.apache.calcite.rex.RexBuilder
-import org.apache.calcite.schema.impl.AggregateFunctionImpl
-import org.apache.calcite.sql.SqlAggFunction
-import org.apache.calcite.sql.validate.SqlUserDefinedAggFunction
-import org.apache.calcite.sql.validate.SqlUserDefinedFunction
-import org.opensearch.flint.spark.query.calcite.{CalciteTypeConverter, UnifiedFunctionCalciteAdapter}
+import org.opensearch.flint.spark.query.calcite.CalciteTypeConverter
 import org.opensearch.flint.spark.query.wrapper.{UnifiedAggregateSparkWrapper, UnifiedFunctionSparkWrapper}
+import org.opensearch.sql.api.UnifiedQueryContext
+import org.opensearch.sql.api.function.{UnifiedFunction, UnifiedFunctionRepository => JavaUnifiedFunctionRepository}
 import org.opensearch.sql.calcite.udf.UserDefinedAggFunction
-import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory
-import org.opensearch.sql.expression.function.{PPLBuiltinOperators, PPLFuncImpTable}
+import org.opensearch.sql.calcite.udf.udaf.ValuesAggFunction
+import org.opensearch.sql.executor.QueryType
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.FunctionIdentifier
-import org.apache.spark.sql.catalyst.analysis.FunctionRegistry
 import org.apache.spark.sql.catalyst.analysis.FunctionRegistry.FunctionBuilder
 import org.apache.spark.sql.catalyst.expressions.ExpressionInfo
 
 /**
- * Repository that inspects the Calcite PPL function implementation table and exposes unified
- * functions that can be adapted for Spark or other engines.
+ * Repository that bridges the unified-query-api's UnifiedFunctionRepository with Spark's function
+ * registration system.
  *
- * This utility checks if a function already exists in Spark's built-in function registry before
- * registering the Calcite version, ensuring we don't accidentally override standard Spark SQL
- * functions.
+ * This utility loads PPL functions from the unified-query-api artifact and adapts them for use in
+ * Spark SQL, ensuring we don't accidentally override standard Spark SQL functions.
  */
 object UnifiedFunctionRepository extends Logging {
 
+  // Lazy initialization of the Java repository with context
+  @transient private lazy val javaRepository: JavaUnifiedFunctionRepository = {
+    val context = UnifiedQueryContext
+      .builder()
+      .language(QueryType.PPL)
+      .build()
+
+    new JavaUnifiedFunctionRepository(context)
+  }
+
   /**
-   * Return Spark function descriptors backed by Calcite unified functions. Filters out functions
-   * that conflict with Spark built-ins. Function resolution via PPLFuncImplTable.resolve()
-   * happens at runtime when actual argument types are available, avoiding NPE from paramTypes().
+   * Return Spark function descriptors backed by unified functions from the unified-query-api.
+   * Filters out functions that conflict with Spark built-ins.
    */
   def loadFunctions(): Seq[(FunctionIdentifier, ExpressionInfo, FunctionBuilder)] = {
-    val operatorTable = PPLBuiltinOperators.instance()
-    val operators = operatorTable.getOperatorList.asScala.collect {
-      case udf: SqlUserDefinedFunction => udf
-    }
+    val descriptors = javaRepository.loadFunctions().asScala
 
-    operators.map { function =>
-      val functionName = function.getName.toLowerCase(Locale.ROOT)
+    descriptors.flatMap { descriptor =>
+      val functionName = descriptor.getFunctionName.toLowerCase(Locale.ROOT)
       val identifier = FunctionIdentifier(functionName)
       logInfo(s"Registering PPL function $identifier")
 
@@ -58,26 +57,20 @@ object UnifiedFunctionRepository extends Logging {
         new ExpressionInfo(classOf[UnifiedFunctionSparkWrapper].getCanonicalName, functionName)
 
       val builder: FunctionBuilder = { children =>
-        // Create typeFactory and rexBuilder inside the closure to avoid serialization issues
-        val typeFactory = OpenSearchTypeFactory.TYPE_FACTORY
-        val rexBuilder = new RexBuilder(typeFactory)
-
-        // Convert Spark children to Calcite RexNodes
-        val rexNodes = children.map { child =>
-          val calciteType = CalciteTypeConverter.toCalciteType(child.dataType, typeFactory)
-          rexBuilder.makeInputRef(calciteType, children.indexOf(child))
+        // Get input types from Spark children
+        val inputTypes = children.map { child =>
+          CalciteTypeConverter.sparkTypeToSqlTypeName(child.dataType)
         }
 
-        // Use engine-agnostic factory method to create UnifiedFunction adapter
-        val unifiedFunction =
-          UnifiedFunctionCalciteAdapter.create(functionName, rexBuilder, rexNodes)
+        // Build the UnifiedFunction with specific input types
+        val unifiedFunction = descriptor.getBuilder.build(inputTypes.asJava)
 
         // Create Spark wrapper that delegates to the unified function
         UnifiedFunctionSparkWrapper(unifiedFunction, children)
       }
 
-      (identifier, info, builder)
-    }
+      Some((identifier, info, builder))
+    }.toSeq
   }
 
   /**
@@ -85,9 +78,6 @@ object UnifiedFunctionRepository extends Logging {
    * creates each UDAF instance with its merge function.
    */
   def loadAggregateFunctions(): Seq[(FunctionIdentifier, ExpressionInfo, FunctionBuilder)] = {
-    import org.opensearch.sql.calcite.udf.udaf.ValuesAggFunction
-    import scala.collection.JavaConverters._
-
     Seq(
       // VALUES aggregate function - collects distinct values in sorted order
       createAggregateFunction(
@@ -103,8 +93,7 @@ object UnifiedFunctionRepository extends Logging {
           }
           buffer
         })
-      // Add more UDAFs here:
-      // createAggregateFunction("first", new FirstAggFunction(), doMergeFirst),
+      // Add more UDAFs here as needed
     )
   }
 

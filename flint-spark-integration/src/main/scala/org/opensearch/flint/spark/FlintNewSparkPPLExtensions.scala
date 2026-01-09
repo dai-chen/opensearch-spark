@@ -5,7 +5,7 @@
 
 package org.opensearch.flint.spark
 
-import org.opensearch.flint.spark.query.UnifiedQueryParser
+import org.opensearch.flint.spark.query.UnifiedQuerySparkParser
 import org.opensearch.flint.spark.query.api.UnifiedFunctionRepository
 import org.opensearch.flint.spark.sql.FlintSparkSqlParser
 
@@ -15,9 +15,9 @@ import org.apache.spark.sql.SparkSessionExtensions
 class FlintNewSparkPPLExtensions extends (SparkSessionExtensions => Unit) with Logging {
 
   override def apply(extensions: SparkSessionExtensions): Unit = {
-    // Inject UnifiedQueryParser to handle PPL queries
+    // Inject UnifiedQuerySparkParser to handle PPL queries
     extensions.injectParser { (spark, parser) =>
-      new UnifiedQueryParser(spark, parser)
+      new UnifiedQuerySparkParser(spark, parser)
     }
 
     // Register regular functions

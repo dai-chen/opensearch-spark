@@ -6,11 +6,10 @@
 package org.opensearch.flint.spark.query
 
 import org.apache.calcite.rel.RelNode
-import org.apache.calcite.rel.rel2sql.RelToSqlConverter
-import org.apache.calcite.sql.dialect.SparkSqlDialect
 import org.opensearch.flint.spark.query.calcite.OpenSearchSparkSqlDialect
 import org.opensearch.flint.spark.query.catalog.SparkSchema
-import org.opensearch.sql.api.UnifiedQueryPlanner
+import org.opensearch.sql.api.{UnifiedQueryContext, UnifiedQueryPlanner}
+import org.opensearch.sql.api.transpiler.UnifiedQueryTranspiler
 import org.opensearch.sql.common.antlr.SyntaxCheckException
 import org.opensearch.sql.executor.QueryType
 
@@ -26,8 +25,12 @@ import org.apache.spark.sql.types.{DataType, StructType}
  * A custom Spark SQL parser that delegates query parsing and planning to the Unified Query
  * Planner. It converts unified queries into Spark SQL queries for execution, and falls back to
  * the default Spark parser when the input query is not supported.
+ *
+ * This parser leverages the latest UnifiedQueryContext, UnifiedQueryPlanner, and
+ * UnifiedQueryTranspiler APIs from the unified query library (2.19+), which provide a centralized
+ * configuration approach for query planning and transpilation.
  */
-class UnifiedQueryParser(
+class UnifiedQuerySparkParser(
     spark: SparkSession,
     sparkParser: ParserInterface,
     queryType: QueryType = QueryType.PPL)
@@ -35,14 +38,14 @@ class UnifiedQueryParser(
     with Logging {
 
   /**
-   * Unified query planner builder with all registered Spark catalogs. The actual planner is built
+   * Unified query context builder with all registered Spark catalogs. The actual context is built
    * per query to reflect the current catalog and namespace, ensuring consistency with Spark SQL's
    * table resolution behavior.
    */
-  private lazy val unifiedQueryPlannerBuilder: UnifiedQueryPlanner.Builder = {
+  private lazy val unifiedQueryContextBuilder: UnifiedQueryContext.Builder = {
     val catalogManager = spark.sessionState.catalogManager
     val builder =
-      UnifiedQueryPlanner
+      UnifiedQueryContext
         .builder()
         .language(queryType)
 
@@ -55,14 +58,18 @@ class UnifiedQueryParser(
     builder
   }
 
-  /** Converter that converts unified plan to Spark SQL using Spark SQL dialect. */
-  private val sparkSqlConverter = new RelToSqlConverter(OpenSearchSparkSqlDialect.DEFAULT)
+  /** Transpiler that converts unified plan to Spark SQL using Spark SQL dialect. */
+  private val sparkSqlTranspiler = UnifiedQueryTranspiler
+    .builder()
+    .dialect(OpenSearchSparkSqlDialect.DEFAULT)
+    .build()
 
   override def parsePlan(query: String): LogicalPlan = {
     try {
-      val unifiedQueryPlanner = buildUnifiedQueryPlanner()
-      val unifiedPlan = unifiedQueryPlanner.plan(query)
-      val sqlText = convertToSparkSqlQuery(unifiedPlan)
+      val context = buildUnifiedQueryContext()
+      val planner = new UnifiedQueryPlanner(context)
+      val unifiedPlan = planner.plan(query)
+      val sqlText = sparkSqlTranspiler.toSql(unifiedPlan)
 
       logWarning(s"PPL translated to Spark SQL:\n $sqlText \n")
       sparkParser.parsePlan(sqlText)
@@ -90,16 +97,11 @@ class UnifiedQueryParser(
 
   override def parseQuery(sqlText: String): LogicalPlan = sparkParser.parseQuery(sqlText)
 
-  private def buildUnifiedQueryPlanner(): UnifiedQueryPlanner = {
+  private def buildUnifiedQueryContext(): UnifiedQueryContext = {
     val currentCatalog = spark.catalog.currentCatalog
     val currentDatabase = spark.catalog.currentDatabase
-    unifiedQueryPlannerBuilder
+    unifiedQueryContextBuilder
       .defaultNamespace(s"$currentCatalog.$currentDatabase")
       .build()
-  }
-
-  private def convertToSparkSqlQuery(plan: RelNode): String = {
-    val sqlNode = sparkSqlConverter.visitRoot(plan).asStatement
-    sqlNode.toSqlString(OpenSearchSparkSqlDialect.DEFAULT).getSql
   }
 }

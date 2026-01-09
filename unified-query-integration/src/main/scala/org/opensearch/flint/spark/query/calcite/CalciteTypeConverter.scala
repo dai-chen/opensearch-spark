@@ -18,6 +18,36 @@ import org.apache.spark.sql.types._
 object CalciteTypeConverter {
 
   /**
+   * Convert a Spark DataType to SQL type name string (for unified-query-api compatibility).
+   */
+  def sparkTypeToSqlTypeName(sparkType: DataType): String = {
+    sparkType match {
+      case BooleanType => "BOOLEAN"
+      case ByteType => "TINYINT"
+      case ShortType => "SMALLINT"
+      case IntegerType => "INTEGER"
+      case LongType => "BIGINT"
+      case FloatType => "FLOAT"
+      case DoubleType => "DOUBLE"
+      case dt: DecimalType => s"DECIMAL(${dt.precision},${dt.scale})"
+      case StringType => "VARCHAR"
+      case BinaryType => "VARBINARY"
+      case DateType => "DATE"
+      case TimestampType => "TIMESTAMP"
+      case ArrayType(elementType, _) =>
+        s"ARRAY<${sparkTypeToSqlTypeName(elementType)}>"
+      case MapType(keyType, valueType, _) =>
+        s"MAP<${sparkTypeToSqlTypeName(keyType)},${sparkTypeToSqlTypeName(valueType)}>"
+      case StructType(fields) =>
+        val fieldStrs = fields.map { f =>
+          s"${f.name}:${sparkTypeToSqlTypeName(f.dataType)}"
+        }
+        s"STRUCT<${fieldStrs.mkString(",")}>"
+      case _ => "VARCHAR" // Fallback to VARCHAR for unknown types
+    }
+  }
+
+  /**
    * Convert a Calcite RelDataType to SQL type name string.
    */
   def relDataTypeToSqlTypeName(calciteType: RelDataType): String = {

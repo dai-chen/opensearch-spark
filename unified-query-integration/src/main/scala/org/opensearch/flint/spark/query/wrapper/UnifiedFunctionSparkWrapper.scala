@@ -5,8 +5,10 @@
 
 package org.opensearch.flint.spark.query.wrapper
 
-import org.opensearch.flint.spark.query.api.UnifiedFunction
+import scala.collection.JavaConverters._
+
 import org.opensearch.flint.spark.query.calcite.CalciteTypeConverter
+import org.opensearch.sql.api.function.UnifiedFunction
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
@@ -18,7 +20,8 @@ import org.apache.spark.sql.types.DataType
  * Spark expression wrapper that delegates to UnifiedFunction for evaluation.
  *
  * This wrapper handles Spark-specific concerns (expression tree, type conversion) while
- * delegating the actual function evaluation to the engine-agnostic UnifiedFunction.
+ * delegating the actual function evaluation to the engine-agnostic UnifiedFunction from the
+ * unified-query-api artifact.
  */
 case class UnifiedFunctionSparkWrapper(
     unifiedFunction: UnifiedFunction,
@@ -29,9 +32,10 @@ case class UnifiedFunctionSparkWrapper(
     with Logging {
 
   override def dataType: DataType =
-    CalciteTypeConverter.sqlTypeNameToSparkType(unifiedFunction.returnType)
+    CalciteTypeConverter.sqlTypeNameToSparkType(unifiedFunction.getReturnType)
 
-  override def nullable: Boolean = unifiedFunction.nullable
+  // UnifiedFunction doesn't expose nullable, default to true for safety
+  override def nullable: Boolean = true
 
   override def foldable: Boolean = false
 
@@ -41,17 +45,17 @@ case class UnifiedFunctionSparkWrapper(
 
     // Convert Spark values to Calcite format
     val calciteInputs = sparkValues.zip(children).map { case (value, expr) =>
-      CalciteTypeConverter.sparkToCalciteValue(value, expr.dataType)
+      CalciteTypeConverter.sparkToCalciteValue(value, expr.dataType).asInstanceOf[Object]
     }
 
-    // Delegate to UnifiedFunction for evaluation
-    val calciteResult = unifiedFunction.eval(calciteInputs)
+    // Delegate to UnifiedFunction for evaluation (Java List[Object] expected)
+    val calciteResult = unifiedFunction.eval(calciteInputs.asJava)
 
     // Convert Calcite result back to Spark format
     CalciteTypeConverter.calciteToSparkValue(calciteResult, dataType)
   }
 
-  override def toString: String = s"${unifiedFunction.functionName}(${children.mkString(",")})"
+  override def toString: String = s"${unifiedFunction.getFunctionName}(${children.mkString(",")})"
 
   override lazy val canonicalized: Expression = {
     val canonicalizedChildren = children.map(_.canonicalized)
