@@ -324,8 +324,6 @@ lazy val unifiedQueryIntegration = (project in file("unified-query-integration")
     name := "unified-query-integration",
     scalaVersion := scala212,
     resolvers ++= Seq(
-      // Local Maven repository takes priority for latest SNAPSHOT builds
-      "Local Maven" at Path.userHome.asFile.toURI.toURL + ".m2/repository",
       // "OpenSearch Snapshots" at "https://aws.oss.sonatype.org/content/repositories/snapshots/",
       "OpenSearch Snapshots" at "https://ci.opensearch.org/ci/dbc/snapshots/maven/",
       "JitPack" at "https://jitpack.io" // TODO: exclude okhttp-aws-signer which requires this
@@ -344,6 +342,7 @@ lazy val unifiedQueryIntegration = (project in file("unified-query-integration")
       // TODO: need ScriptEngine interface
       osServer,
       // TODO: move ExtendedRelSerializer to core module
+      /*
       "org.opensearch.query" % "unified-query-opensearch" % "2.19.4.0-SNAPSHOT"
         excludeAll(
           ExclusionRule(organization = "com.fasterxml.jackson.core"),
@@ -351,6 +350,7 @@ lazy val unifiedQueryIntegration = (project in file("unified-query-integration")
           ExclusionRule(organization = "com.fasterxml.jackson.module"),
           ExclusionRule(organization = "com.fasterxml.jackson.jaxrs"),
           ExclusionRule(organization = "org.opensearch")),
+       */
       "org.opensearch.query" % "unified-query-api" % "2.19.4.0-SNAPSHOT"
         excludeAll(
           ExclusionRule(organization = "com.fasterxml.jackson.core"),

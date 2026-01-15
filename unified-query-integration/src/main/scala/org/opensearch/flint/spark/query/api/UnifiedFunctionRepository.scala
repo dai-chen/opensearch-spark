@@ -46,12 +46,15 @@ object UnifiedFunctionRepository extends Logging {
    * Filters out functions that conflict with Spark built-ins.
    */
   def loadFunctions(): Seq[(FunctionIdentifier, ExpressionInfo, FunctionBuilder)] = {
+    logWarning("=== [UnifiedFunctionRepository] Loading PPL functions from unified-query-api ===")
     val descriptors = javaRepository.loadFunctions().asScala
+    logWarning(
+      s"=== [UnifiedFunctionRepository] Found ${descriptors.size} function descriptors ===")
 
     descriptors.flatMap { descriptor =>
       val functionName = descriptor.getFunctionName.toLowerCase(Locale.ROOT)
       val identifier = FunctionIdentifier(functionName)
-      logInfo(s"Registering PPL function $identifier")
+      logWarning(s"=== [UnifiedFunctionRepository] Registering PPL function: $functionName ===")
 
       val info =
         new ExpressionInfo(classOf[UnifiedFunctionSparkWrapper].getCanonicalName, functionName)
@@ -61,9 +64,14 @@ object UnifiedFunctionRepository extends Logging {
         val inputTypes = children.map { child =>
           CalciteTypeConverter.sparkTypeToSqlTypeName(child.dataType)
         }
+        logWarning(
+          s"=== [UnifiedFunctionRepository] Building function '$functionName' with input types: ${inputTypes
+              .mkString(", ")} ===")
 
         // Build the UnifiedFunction with specific input types
         val unifiedFunction = descriptor.getBuilder.build(inputTypes.asJava)
+        logWarning(
+          s"=== [UnifiedFunctionRepository] Built UnifiedFunction '$functionName' -> returnType: ${unifiedFunction.getReturnType} ===")
 
         // Create Spark wrapper that delegates to the unified function
         UnifiedFunctionSparkWrapper(unifiedFunction, children)
