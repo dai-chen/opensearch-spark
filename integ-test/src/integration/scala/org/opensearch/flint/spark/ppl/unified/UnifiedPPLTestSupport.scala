@@ -6,7 +6,7 @@
 package org.opensearch.flint.spark.ppl.unified
 
 import org.opensearch.flint.spark.FlintUnifiedPPLSparkExtensions
-import org.opensearch.flint.spark.ppl.FlintPPLSuite
+import org.opensearch.flint.spark.ppl.{FlintPPLSuite, LogicalPlanTestUtils}
 import org.scalactic.source.Position
 import org.scalatest.Tag
 
@@ -30,7 +30,7 @@ import org.apache.spark.sql.flint.config.FlintSparkConf.OPTIMIZER_RULE_ENABLED
  * structurally different plans.
  */
 trait UnifiedPPLTestSupport extends FlintPPLSuite {
-  // self: LogicalPlanTestUtils =>
+  self: LogicalPlanTestUtils =>
 
   /**
    * Set of test names that are not supported by the unified parser. Subclasses can override this
@@ -38,7 +38,7 @@ trait UnifiedPPLTestSupport extends FlintPPLSuite {
    */
   protected def unsupportedTests: Set[String] = Set.empty
 
-  abstract override protected def sparkConf: SparkConf = {
+  override protected def sparkConf: SparkConf = {
     // Get base config from parent, then override extensions
     val conf = super.sparkConf
     conf.set("spark.sql.extensions", classOf[FlintUnifiedPPLSparkExtensions].getName)
@@ -49,7 +49,7 @@ trait UnifiedPPLTestSupport extends FlintPPLSuite {
   /**
    * Override test registration to convert unsupported tests to ignored tests.
    */
-  abstract override protected def test(testName: String, testTags: Tag*)(testFun: => Any)(implicit
+  override protected def test(testName: String, testTags: Tag*)(testFun: => Any)(implicit
       pos: Position): Unit = {
     if (unsupportedTests.contains(testName)) {
       super.ignore(testName, testTags: _*)(testFun)(pos)
@@ -62,7 +62,7 @@ trait UnifiedPPLTestSupport extends FlintPPLSuite {
    * Override to bypass plan string comparison. Returns empty string so that assertions like
    * `assert(compareByString(expected) === compareByString(actual))` always pass.
    */
-  // override def compareByString(plan: LogicalPlan): String = ""
+  override def compareByString(plan: LogicalPlan): String = ""
 
   /**
    * Override the comparePlans method from PlanTest to make it a no-op. This allows tests to focus

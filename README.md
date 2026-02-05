@@ -51,6 +51,12 @@ To use PPL to Spark translation, you can run Spark with PPL extension:
 spark-sql --conf "spark.sql.extensions=org.opensearch.flint.spark.FlintPPLSparkExtensions"
 ```
 
+> **Note**: We are upgrading to a new unified PPL extension (shown below) which unifies Spark PPL with the [unified query library](https://github.com/opensearch-project/sql). The legacy PPL extension above will be fully deprecated in a future release. See [PPL Breaking Changes](docs/ppl-lang/ppl-breaking-changes.md) for migration guidance.
+
+```
+spark-sql --conf "spark.sql.extensions=org.opensearch.flint.spark.FlintUnifiedPPLSparkExtensions"
+```
+
 ### Running With both Extension 
 ```
 spark-sql --conf "spark.sql.extensions=org.opensearch.flint.spark.FlintPPLSparkExtensions,org.opensearch.flint.spark.FlintSparkExtensions"
