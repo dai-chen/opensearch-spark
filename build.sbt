@@ -301,7 +301,7 @@ lazy val flintSparkIntegration = (project in file("flint-spark-integration"))
   )
 
 lazy val unifiedQuerySparkIntegration = (project in file("unified-query-spark-integration"))
-  .enablePlugins(AssemblyPlugin)
+  .disablePlugins(AssemblyPlugin)
   .settings(
     commonSettings,
     name := "unified-query-spark-integration",
@@ -334,23 +334,7 @@ lazy val unifiedQuerySparkIntegration = (project in file("unified-query-spark-in
           ExclusionRule(organization = "org.slf4j"))
         exclude("org.opensearch.query", "unified-query-protocol")),
     libraryDependencies ++= deps(sparkVersion),
-    publish / skip := true,
-    // Assembly settings
-    assemblyPackageScala / assembleArtifact := false,
-    assembly / assemblyOption ~= {
-      _.withIncludeScala(false)
-    },
-    assembly / assemblyMergeStrategy := {
-      case PathList(ps @ _*) if ps.last endsWith ("module-info.class") =>
-        MergeStrategy.discard
-      case PathList("module-info.class") => MergeStrategy.discard
-      case PathList("META-INF", "versions", xs @ _, "module-info.class") =>
-        MergeStrategy.discard
-      case x =>
-        val oldStrategy = (assembly / assemblyMergeStrategy).value
-        oldStrategy(x)
-    },
-    assembly / test := (Test / test).value
+    publish / skip := true
   )
 
 lazy val IntegrationTest = config("it") extend Test
@@ -409,7 +393,7 @@ lazy val integtest = (project in file("integ-test"))
       "org.scala-lang.modules" %% "scala-collection-compat" % "2.11.0" % "test"),
     libraryDependencies ++= deps(sparkVersion),
     Test / fullClasspath ++= Seq((flintSparkIntegration / assembly).value, (pplSparkIntegration / assembly).value,
-      (sparkSqlApplication / assembly).value, (unifiedQuerySparkIntegration / assembly).value
+      (sparkSqlApplication / assembly).value
     ),
     IntegrationTest / dependencyClasspath ++= (Test / dependencyClasspath).value,
     AwsIntegrationTest / dependencyClasspath ++= (Test / dependencyClasspath).value,

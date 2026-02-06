@@ -21,13 +21,11 @@ class FlintSparkUnifiedPPLBasicITSuite
     "explain codegen mode test",
     "explain cost mode test",
     "explain formatted mode test",
+    "test explain backtick table names and name contains '.'",
     // Unified PPL doesn't support describe command
     "describe (extended) table query test",
     "describe (extended) FQN (2 parts) table query test",
-    // FIXME: quote table name before spark.table() call
-    "test backtick table names and name contains '.'",
     "test describe backtick table names and name contains '.'",
-    "test explain backtick table names and name contains '.'",
     "test table name with more than 3 parts",
     // Unified PPL doesn't support search multiple tables
     "Search multiple tables - translated into union call with fields",
