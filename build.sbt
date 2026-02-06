@@ -182,6 +182,7 @@ lazy val flintCommons = (project in file("flint-commons"))
   .enablePlugins(AssemblyPlugin)
 
 lazy val pplSparkIntegration = (project in file("ppl-spark-integration"))
+  .dependsOn(unifiedQuerySparkIntegration)
   .enablePlugins(AssemblyPlugin, Antlr4Plugin)
   .settings(
     commonSettings,
